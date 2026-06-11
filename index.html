@@ -1,0 +1,2590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EUV Lithography System Explorer — Supply Chain & Value Map</title>
+<style>
+  :root{
+    --bg:#0b1020; --panel:#111a2e; --panel2:#0e1626; --line:#22304d;
+    --ink:#e8edf7; --ink-dim:#93a0bd; --ink-faint:#5d6a86;
+    --accent:#7cc4ff;
+    --src:#ffa94d; --opt:#b197fc; --stg:#38d9a9; --inf:#748ffc; --sw:#69db7c; --con:#f783ac;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{background:var(--bg); color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; font-size:14px; line-height:1.45;}
+  body{min-width:1180px;}
+  a{color:var(--accent); text-decoration:none;}
+
+  header{padding:20px 28px 14px; border-bottom:1px solid var(--line); display:flex; flex-wrap:wrap; gap:14px; align-items:flex-end; justify-content:space-between;}
+  header h1{font-size:21px; letter-spacing:.2px;}
+  header h1 span{color:var(--accent);}
+  .sub{color:var(--ink-dim); font-size:12.5px; margin-top:4px; max-width:760px;}
+  .stats{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;}
+  .chip{background:var(--panel); border:1px solid var(--line); border-radius:20px; padding:3px 11px; font-size:11.5px; color:var(--ink-dim); white-space:nowrap;}
+  .chip b{color:var(--ink); font-weight:600;}
+  .price-toggle{display:flex; gap:6px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:4px;}
+  .price-toggle button{background:transparent; border:0; color:var(--ink-dim); font:inherit; font-size:12px; padding:7px 12px; border-radius:7px; cursor:pointer; text-align:left;}
+  .price-toggle button b{display:block; font-size:12.5px; color:var(--ink);}
+  .price-toggle button.on{background:#1c2c4d; outline:1px solid #2e4570;}
+  .price-toggle button.on b{color:var(--accent);}
+  #langBtn{position:fixed; top:12px; right:16px; z-index:60; background:#1c2c4d; border:1px solid #2e4570; color:var(--accent); font:inherit; font-size:12.5px; font-weight:600; padding:7px 14px; border-radius:20px; cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.45);}
+  #langBtn:hover{background:#24365c;}
+
+  main{display:grid; grid-template-columns:318px 1fr; gap:0; align-items:start;}
+  /* ---------- sidebar ---------- */
+  aside{border-right:1px solid var(--line); padding:14px 12px 30px; max-height:calc(100vh - 0px); position:sticky; top:0; overflow-y:auto;}
+  .grp{margin-bottom:14px;}
+  .grp-h{font-size:10.5px; text-transform:uppercase; letter-spacing:1.2px; color:var(--ink-faint); padding:4px 8px 6px; display:flex; align-items:center; gap:7px;}
+  .grp-h i{width:8px;height:8px;border-radius:2px;display:inline-block;}
+  .item{display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:8px; cursor:pointer; border:1px solid transparent;}
+  .item:hover,.item.active{background:#16223c; border-color:#2a3d63;}
+  .item .nm{flex:1; font-size:12.5px;}
+  .item .pc{font-size:11px; font-variant-numeric:tabular-nums; color:var(--ink-dim); background:var(--panel2); border:1px solid var(--line); border-radius:6px; padding:1px 6px; white-space:nowrap;}
+  .item .dot{width:7px;height:7px;border-radius:50%;flex:none;}
+
+  /* ---------- stage / svg ---------- */
+  .stage{padding:14px 22px 8px;}
+  .canvas-wrap{background:radial-gradient(1200px 600px at 55% 35%, #101a31 0%, #0b1020 70%); border:1px solid var(--line); border-radius:14px; padding:6px 6px 0;}
+  svg{display:block; width:100%; height:auto;}
+  svg text{font-family:inherit; user-select:none; pointer-events:none;}
+  .lbl{font-size:10.5px; fill:var(--ink-dim);}
+  .lbl-s{font-size:9.5px; fill:var(--ink-faint);}
+  .keytxt{font-size:10px; fill:var(--ink-dim);}
+
+  .comp{cursor:pointer;}
+  .comp .shape{transition:filter .15s ease, opacity .15s ease;}
+  /* group fills */
+  .f-src{fill:rgba(255,169,77,.10); stroke:rgba(255,169,77,.65); stroke-width:1.4;}
+  .f-opt{fill:rgba(177,151,252,.10); stroke:rgba(177,151,252,.7); stroke-width:1.4;}
+  .f-stg{fill:rgba(56,217,169,.10); stroke:rgba(56,217,169,.65); stroke-width:1.4;}
+  .f-inf{fill:rgba(116,143,252,.10); stroke:rgba(116,143,252,.6); stroke-width:1.4;}
+  .f-sw{fill:rgba(105,219,124,.10); stroke:rgba(105,219,124,.6); stroke-width:1.4;}
+  .f-con{fill:rgba(247,131,172,.18); stroke:rgba(247,131,172,.8); stroke-width:1.4;}
+  svg.dim .comp:not(.active){opacity:.32;}
+  .comp.active{filter:drop-shadow(0 0 7px rgba(124,196,255,.65)) brightness(1.35);}
+  .comp.active .shape{stroke-width:2.4;}
+
+  .beam-euv{stroke:#c39bff; stroke-width:2; fill:none; stroke-dasharray:7 7; animation:dash 1.1s linear infinite; pointer-events:none; opacity:.9;}
+  .beam-co2{stroke:#ff6b6b; stroke-width:2; fill:none; stroke-dasharray:4 7; animation:dash 0.9s linear infinite; pointer-events:none; opacity:.85;}
+  @keyframes dash{to{stroke-dashoffset:-28;}}
+
+  .hint{color:var(--ink-faint); font-size:11.5px; padding:8px 4px 2px; display:flex; justify-content:space-between;}
+
+  /* ---------- cost bar ---------- */
+  .costbar-wrap{padding:10px 22px 6px;}
+  .costbar-title{font-size:11px; text-transform:uppercase; letter-spacing:1.1px; color:var(--ink-faint); margin-bottom:7px;}
+  .costbar{display:flex; height:34px; border-radius:8px; overflow:hidden; border:1px solid var(--line);}
+  .seg{position:relative; cursor:pointer; transition:width .45s ease, filter .15s, opacity .15s; display:flex; align-items:center; justify-content:center; min-width:0;}
+  .seg span{font-size:10px; color:rgba(10,14,25,.85); font-weight:700; overflow:hidden; white-space:nowrap; padding:0 3px;}
+  .costbar.dim .seg:not(.active){opacity:.35;}
+  .seg.active{filter:brightness(1.25); outline:2px solid #fff3; z-index:1;}
+
+  /* ---------- tooltip ---------- */
+  #tip{position:fixed; z-index:50; width:400px; max-height:72vh; overflow-y:auto; background:#121c33f2; backdrop-filter:blur(8px); border:1px solid #31477a; border-radius:13px; box-shadow:0 14px 44px rgba(0,0,0,.55); padding:0; display:none; pointer-events:none;}
+  #tip.show{display:block;}
+  #tip.pinned{pointer-events:auto; border-color:#4a6cb3;}
+  .tip-head{padding:13px 15px 10px; border-bottom:1px solid #243c66; position:sticky; top:0; background:#15203af8; border-radius:13px 13px 0 0;}
+  .tip-grp{font-size:10px; text-transform:uppercase; letter-spacing:1.1px; font-weight:700;}
+  .tip-name{font-size:15.5px; font-weight:700; margin:3px 0 6px;}
+  .tip-cost{display:flex; align-items:baseline; gap:9px;}
+  .tip-cost .big{font-size:21px; font-weight:800; color:var(--accent); font-variant-numeric:tabular-nums;}
+  .tip-cost .rng{font-size:11px; color:var(--ink-dim);}
+  .tip-body{padding:11px 15px 13px;}
+  .tip-desc{font-size:12.5px; color:#c6d1e6; margin-bottom:10px;}
+  .tip-h{font-size:10px; text-transform:uppercase; letter-spacing:1.1px; color:var(--ink-faint); margin:11px 0 5px; border-top:1px solid #1d2c4a; padding-top:9px;}
+  .tip-h:first-of-type{border-top:0; padding-top:0; margin-top:0;}
+  .vlist{list-style:none;}
+  .vlist li{padding:3.5px 0; font-size:12px;}
+  .vlist b{color:var(--ink);}
+  .tk{display:inline-block; font-size:10px; background:#1b2a4a; border:1px solid #2c4271; color:#9db8e8; border-radius:5px; padding:0 5px; margin-left:6px; vertical-align:1px; white-space:nowrap;}
+  .role{display:block; color:var(--ink-dim); font-size:11.5px;}
+  .chips{display:flex; flex-wrap:wrap; gap:5px;}
+  .mchip{font-size:10.5px; background:#16233e; border:1px solid #243c66; color:#aebcd9; padding:2px 8px; border-radius:12px;}
+  .note{font-size:11.5px; color:#d7c9a3; background:#2a230f66; border:1px solid #4a3d1b; border-radius:8px; padding:7px 9px; margin-top:9px;}
+  .hna{font-size:11.5px; color:#c0b3ee; background:#221a3f66; border:1px solid #3c3070; border-radius:8px; padding:7px 9px; margin-top:9px;}
+  .tip-foot{padding:7px 15px 9px; border-top:1px solid #1d2c4a; font-size:10.5px; color:var(--ink-faint); display:flex; justify-content:space-between; align-items:center;}
+  .tip-close{background:#1b2a4a; color:#9db8e8; border:1px solid #2c4271; border-radius:6px; font-size:10.5px; padding:2px 8px; cursor:pointer; display:none;}
+  #tip.pinned .tip-close{display:inline-block;}
+
+  /* ---------- footer ---------- */
+  footer{padding:18px 28px 46px; border-top:1px solid var(--line); margin-top:14px;}
+  footer h2{font-size:15px; margin:18px 0 10px;}
+  .cards{display:grid; grid-template-columns:repeat(4,1fr); gap:12px;}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:13px 14px;}
+  .card h3{font-size:13px; margin-bottom:6px; color:var(--accent);}
+  .card p{font-size:12px; color:var(--ink-dim);}
+  .card p b{color:var(--ink);}
+  table{width:100%; border-collapse:collapse; font-size:12px;}
+  th{font-size:10.5px; text-transform:uppercase; letter-spacing:.9px; color:var(--ink-faint); text-align:left; padding:7px 10px; border-bottom:1px solid var(--line);}
+  td{padding:6px 10px; border-bottom:1px solid #18233c; color:#c6d1e6;}
+  td:first-child{color:var(--ink); font-weight:600;}
+  tr:hover td{background:#131e36;}
+  .disc{font-size:11.5px; color:var(--ink-faint); margin-top:16px; max-width:1000px;}
+
+  /* ---------- view tabs ---------- */
+  #viewTabs{display:flex; gap:6px; padding:8px 28px 0; border-bottom:1px solid var(--line);}
+  #viewTabs button{background:transparent; border:1px solid transparent; border-bottom:none; color:var(--ink-dim); font:inherit; font-size:13px; padding:9px 18px; border-radius:10px 10px 0 0; cursor:pointer;}
+  #viewTabs button:hover{color:var(--ink);}
+  #viewTabs button.on{background:var(--panel); border-color:var(--line); color:var(--accent); font-weight:600;}
+  body[data-view="euv"] #procMain{display:none;}
+  body[data-view="process"] #euvMain{display:none;}
+  body[data-view="process"] .price-toggle{visibility:hidden;}
+
+  /* ---------- process view ---------- */
+  .stagebtn{display:flex; align-items:center; gap:9px; width:100%; text-align:left; background:transparent; border:1px solid transparent; border-radius:9px; padding:7px 9px; color:var(--ink); font:inherit; font-size:12.5px; cursor:pointer; margin-bottom:2px;}
+  .stagebtn:hover{background:#16223c;}
+  .stagebtn.on{background:#1c2c4d; border-color:#2e4570;}
+  .stagebtn .num{font-size:10px; color:var(--ink-faint); width:20px; flex:none; font-variant-numeric:tabular-nums;}
+  .stagebtn.on .num{color:var(--accent);}
+  .stagebtn .sn{flex:1;}
+  .stagebtn .stg{font-size:9px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.6px; white-space:nowrap;}
+  .proc-stage{padding:14px 22px 8px;}
+  .minimap{display:flex; flex-wrap:wrap; gap:4px; align-items:center; margin-bottom:14px;}
+  .mini{font-size:10.5px; color:var(--ink-dim); background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:2px 8px; cursor:pointer; white-space:nowrap;}
+  .mini:hover{color:var(--ink);}
+  .mini.on{background:#1c2c4d; border-color:#3e5d94; color:var(--accent); font-weight:600;}
+  .marrow{color:var(--ink-faint); font-size:10px;}
+  #procTitle{font-size:18px; margin:0 0 4px;}
+  #procTitle .ptag{font-size:10px; text-transform:uppercase; letter-spacing:1px; color:#9db8e8; background:#1b2a4a; border:1px solid #2c4271; border-radius:6px; padding:2px 8px; vertical-align:3px; margin-left:10px; font-weight:600;}
+  .proc-desc{color:var(--ink-dim); font-size:13px; max-width:1000px; margin-bottom:8px;}
+  .lanes{display:flex; flex-direction:column; gap:10px; margin-top:12px;}
+  .lane{background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:11px 13px;}
+  .lane-h{font-size:10px; letter-spacing:1.2px; text-transform:uppercase; color:var(--ink-faint); margin-bottom:9px;}
+  .flow{display:flex; flex-wrap:wrap; align-items:center; gap:7px;}
+  .fstep{background:#221a3f88; border:1px solid #3c3070; color:#c8bcf2; border-radius:8px; padding:6px 13px; font-size:12px;}
+  .farrow{color:var(--ink-faint); font-size:12px;}
+  .nodes{display:flex; flex-wrap:wrap; gap:8px;}
+  .pnode{background:#16233e; border:1px solid #2c4271; border-radius:9px; padding:7px 11px; color:var(--ink); font:inherit; font-size:12px; cursor:pointer; display:flex; align-items:center; gap:8px; transition:border-color .12s, background .12s;}
+  .pnode .pw{font-size:10px; color:#9db8e8; background:#101c33; border:1px solid #2c4271; border-radius:5px; padding:0 6px; white-space:nowrap;}
+  .pnode:hover,.pnode.active{border-color:#7cc4ff; background:#1c2c4d;}
+  .pnode.matn{background:#12251d; border-color:#2d5444;}
+  .pnode.matn .pw{background:#0e1f17; border-color:#2d5444; color:#8fd6b1;}
+  .pnode.matn:hover,.pnode.matn.active{border-color:#38d9a9; background:#173425;}
+  .proc-basis{font-size:11px; color:var(--ink-faint); margin:14px 2px 10px; max-width:1020px;}
+  #gfxBox svg{display:block; width:100%; height:auto; max-height:360px;}
+  #gfxBox .gx{cursor:pointer;}
+  #gfxBox .gx .shp{transition:opacity .15s;}
+  #gfxBox .gx.active{filter:drop-shadow(0 0 7px rgba(124,196,255,.75)) brightness(1.35);}
+  #gfxBox svg.gdim .gx:not(.active){opacity:.3;}
+  #pieBox{display:flex; gap:24px; flex-wrap:wrap;}
+  .pie-card{background:#101a30; border:1px solid var(--line); border-radius:11px; padding:12px 14px; min-width:350px; flex:1;}
+  .pie-t{font-size:10.5px; color:var(--ink-dim); text-transform:uppercase; letter-spacing:.8px; margin-bottom:8px;}
+  .pie-wrap{display:flex; gap:16px; align-items:center;}
+  .pslice{cursor:pointer; transition:filter .12s;}
+  .pslice:hover,.pslice.hot{filter:brightness(1.4);}
+  .pleg{display:flex; flex-direction:column; gap:3px; font-size:11.5px; min-width:0;}
+  .prow{display:flex; align-items:center; gap:7px; padding:1px 5px; border-radius:5px;}
+  .prow:hover{background:#16223c;}
+  .prow i{width:9px; height:9px; border-radius:2px; flex:none;}
+  .prow .pn{color:var(--ink);}
+  .prow .pv{color:var(--ink-dim); font-variant-numeric:tabular-nums;}
+  .pie-note{font-size:10.5px; color:var(--ink-faint); margin-top:9px;}
+</style>
+</head>
+<body data-view="euv">
+
+<button id="langBtn" title="Switch language / 切换语言">中文</button>
+
+<header>
+  <div>
+    <h1 data-zh="EUV 光刻系统全景解析 <span>· 供应链与价值图谱</span>">EUV Lithography System Explorer <span>· Supply-Chain & Value Map</span></h1>
+    <div class="sub" data-zh="极紫外（13.5 nm）光刻机交互式剖面图 — 基于 ASML TWINSCAN NXE 架构（0.33 NA），全球唯一量产的 EUV 平台。将光标悬停在任意组件上，即可查看其供应商、材料、制造工具链以及占整机价值的估算比例。点击可固定信息面板。">Interactive cutaway of an extreme-ultraviolet (13.5&nbsp;nm) scanner — ASML TWINSCAN NXE architecture (0.33&nbsp;NA), the only EUV platform in production worldwide. Hover any component for vendors, materials, manufacturing toolchain and estimated share of system value. Click to pin the panel.</div>
+    <div class="stats">
+      <span class="chip" data-zh="λ = <b>13.5 nm</b>（锡等离子体）">λ = <b>13.5&nbsp;nm</b> (Sn plasma)</span>
+      <span class="chip" data-zh="<b>&gt;100,000</b> 个零件 · 约 2 km 线缆"><b>&gt;100,000</b> parts · ~2&nbsp;km cabling</span>
+      <span class="chip" data-zh="约 <b>180 吨</b> · 40 个集装箱 · 20 辆卡车 · 3 架波音 747 货机">~<b>180&nbsp;t</b> · 40 containers · 20 trucks · 3 × 747 freighters</span>
+      <span class="chip" data-zh="NXE:3800E <b>≈220 片/小时</b>">NXE:3800E <b>≈220&nbsp;wph</b></span>
+      <span class="chip" data-zh="唯一整机商：<b>ASML</b> <span style='color:#5d6a86'>（NASDAQ/AMS: ASML）</span>">Sole OEM: <b>ASML</b> <span style="color:#5d6a86">(NASDAQ/AMS: ASML)</span></span>
+    </div>
+  </div>
+  <div class="price-toggle" id="priceToggle">
+    <button data-price="low" class="on" data-zh="<b>Low-NA · NXE:3800E</b>0.33 NA · 估算单价 €2.0–2.3 亿"><b>Low-NA · NXE:3800E</b>0.33 NA · est. €200–230M ASP</button>
+    <button data-price="high" data-zh="<b>High-NA · EXE:5200B</b>0.55 NA 变形光学 · 估算单价 €3.5–4.0 亿"><b>High-NA · EXE:5200B</b>0.55 NA anamorphic · est. €350–400M ASP</button>
+  </div>
+</header>
+
+<div id="viewTabs">
+  <button data-view="euv" class="on" data-zh="EUV 光刻机整机解析">EUV Machine Explorer</button>
+  <button data-view="process" data-zh="芯片制造全流程 · 材料与设备">Chip-Making Process Flow · Materials &amp; Equipment</button>
+</div>
+
+<main id="euvMain">
+  <aside id="sidebar"></aside>
+
+  <section>
+    <div class="stage">
+      <div class="canvas-wrap">
+        <svg id="machine" viewBox="0 0 1200 830" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <radialGradient id="plasmaGlow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#fff7d6" stop-opacity="1"/>
+              <stop offset="35%" stop-color="#ffd06b" stop-opacity=".85"/>
+              <stop offset="100%" stop-color="#ff8a3d" stop-opacity="0"/>
+            </radialGradient>
+          </defs>
+
+          <!-- floor & sub-fab -->
+          <rect x="30" y="760" width="1150" height="64" fill="rgba(255,255,255,.025)"/>
+          <line x1="30" y1="760" x2="1180" y2="760" stroke="#2a3a5e" stroke-width="2"/>
+          <text class="lbl-s" x="36" y="775">SUB-FAB LEVEL</text>
+          <text class="lbl-s" x="36" y="752">FAB FLOOR</text>
+
+          <!-- beam legend -->
+          <g>
+            <line x1="48" y1="92" x2="80" y2="92" class="beam-co2"/>
+            <text class="keytxt" x="86" y="95">CO₂ drive laser (10.6 µm)</text>
+            <line x1="48" y1="112" x2="80" y2="112" class="beam-euv"/>
+            <text class="keytxt" x="86" y="115">EUV light (13.5 nm) — in vacuum, mirrors only</text>
+            <text class="lbl-s" x="48" y="136">Stylized cross-section — not to scale</text>
+          </g>
+
+          <!-- ===== integration: outer enclosure (hover the outline) ===== -->
+          <g class="comp" data-comp="integration">
+            <rect class="shape f-inf" x="150" y="70" width="880" height="620" rx="18" fill="rgba(0,0,0,0)" pointer-events="stroke" stroke-width="3"/>
+          </g>
+          <text class="lbl" x="402" y="62">Vacuum enclosure / system envelope — hover edge: final assembly &amp; qualification</text>
+
+          <!-- ===== frame: base frame, isolators, metrology frame ===== -->
+          <g class="comp" data-comp="frame">
+            <rect class="shape f-inf" x="170" y="690" width="840" height="26" rx="4"/>
+            <rect class="shape f-inf" x="210" y="716" width="70" height="44" rx="4"/>
+            <rect class="shape f-inf" x="565" y="716" width="70" height="44" rx="4"/>
+            <rect class="shape f-inf" x="920" y="716" width="70" height="44" rx="4"/>
+            <rect class="shape f-inf" x="505" y="565" width="385" height="18" rx="3"/>
+            <rect class="shape f-inf" x="515" y="583" width="22" height="107" rx="3"/>
+            <rect class="shape f-inf" x="865" y="583" width="22" height="107" rx="3"/>
+          </g>
+          <text class="lbl" x="178" y="708">Base frame · active vibration isolation</text>
+          <text class="lbl-s" x="512" y="561">Metrology frame</text>
+
+          <!-- ===== source vessel ===== -->
+          <g class="comp" data-comp="vessel">
+            <rect class="shape f-src" x="170" y="500" width="290" height="180" rx="14"/>
+            <line class="shape" x1="293" y1="505" x2="300" y2="492" stroke="rgba(255,169,77,.65)" stroke-width="1.4"/>
+            <line class="shape" x1="317" y1="505" x2="310" y2="492" stroke="rgba(255,169,77,.65)" stroke-width="1.4"/>
+            <circle cx="305" cy="582" r="20" fill="url(#plasmaGlow)"/>
+            <circle class="shape" cx="305" cy="582" r="6" fill="#ffe9b0" stroke="#ffb14d"/>
+          </g>
+          <text class="lbl" x="182" y="666">EUV source vessel · Sn plasma</text>
+          <text class="lbl-s" x="322" y="496">intermediate focus</text>
+
+          <!-- collector -->
+          <g class="comp" data-comp="collector">
+            <path class="shape" d="M 224,598 Q 258,642 296,648" fill="none" stroke="rgba(255,169,77,.9)" stroke-width="11" stroke-linecap="round"/>
+            <path class="shape" d="M 314,648 Q 352,642 386,598" fill="none" stroke="rgba(255,169,77,.9)" stroke-width="11" stroke-linecap="round"/>
+          </g>
+          <text class="lbl-s" x="318" y="640">collector mirror</text>
+
+          <!-- droplet generator -->
+          <g class="comp" data-comp="droplet">
+            <rect class="shape f-src" x="178" y="540" width="72" height="30" rx="5"/>
+            <circle class="shape" cx="262" cy="578" r="2.6" fill="#ffd9a0"/>
+            <circle class="shape" cx="277" cy="580" r="2.6" fill="#ffd9a0"/>
+            <circle class="shape" cx="291" cy="581" r="2.6" fill="#ffd9a0"/>
+          </g>
+          <text class="lbl-s" x="180" y="535">tin droplet generator</text>
+
+          <!-- drive laser (sub-fab) -->
+          <g class="comp" data-comp="drive-laser">
+            <rect class="shape f-src" x="160" y="772" width="240" height="42" rx="7"/>
+            <rect class="shape f-src" x="297" y="680" width="16" height="92" rx="3"/>
+          </g>
+          <text class="lbl" x="172" y="798">CO₂ drive laser — TRUMPF (sub-fab)</text>
+          <text class="lbl-s" x="320" y="730" transform="rotate(-90 320 730)"></text>
+
+          <!-- ===== illuminator ===== -->
+          <g class="comp" data-comp="illuminator">
+            <polygon class="shape f-opt" points="250,450 460,190 518,237 308,497"/>
+            <line class="shape" x1="330" y1="430" x2="362" y2="404" stroke="#cdbcff" stroke-width="3.5"/>
+            <line class="shape" x1="412" y1="272" x2="444" y2="246" stroke="#cdbcff" stroke-width="3.5"/>
+          </g>
+          <text class="lbl" x="252" y="372" transform="rotate(-51 252 372)">Illuminator — ZEISS</text>
+
+          <!-- ===== POB ===== -->
+          <g class="comp" data-comp="pob">
+            <rect class="shape f-opt" x="540" y="205" width="280" height="360" rx="12"/>
+            <path class="shape" d="M 644,244 q 16,12 32,8" fill="none" stroke="#cdbcff" stroke-width="4"/>
+            <path class="shape" d="M 560,308 q 12,14 30,12" fill="none" stroke="#cdbcff" stroke-width="4"/>
+            <path class="shape" d="M 694,372 q 16,12 32,6" fill="none" stroke="#cdbcff" stroke-width="4"/>
+            <path class="shape" d="M 564,432 q 12,14 30,12" fill="none" stroke="#cdbcff" stroke-width="4"/>
+            <path class="shape" d="M 704,492 q 16,12 32,6" fill="none" stroke="#cdbcff" stroke-width="4"/>
+            <path class="shape" d="M 638,540 q 16,12 34,4" fill="none" stroke="#cdbcff" stroke-width="4"/>
+          </g>
+          <text class="lbl" x="556" y="228">Projection optics (6-mirror, 4×) — ZEISS</text>
+
+          <!-- ===== reticle stage ===== -->
+          <g class="comp" data-comp="reticle-stage">
+            <rect class="shape f-stg" x="400" y="100" width="300" height="58" rx="8"/>
+          </g>
+          <text class="lbl" x="412" y="134">Reticle stage (maglev, scans 4×)</text>
+
+          <!-- mask (consumable) -->
+          <g class="comp" data-comp="mask">
+            <rect class="shape f-con" x="520" y="158" width="80" height="13" rx="2"/>
+            <line class="shape" x1="522" y1="176" x2="598" y2="176" stroke="rgba(247,131,172,.8)" stroke-width="1.6"/>
+          </g>
+          <text class="lbl-s" x="608" y="172">EUV mask + pellicle</text>
+
+          <!-- reticle handling -->
+          <g class="comp" data-comp="reticle-handling">
+            <rect class="shape f-stg" x="730" y="88" width="210" height="92" rx="10"/>
+            <rect class="shape f-stg" x="858" y="110" width="58" height="40" rx="4"/>
+            <rect class="shape f-stg" x="700" y="120" width="30" height="28" rx="4"/>
+          </g>
+          <text class="lbl" x="742" y="112">Reticle handler · pod load ports</text>
+
+          <!-- ===== wafer stage ===== -->
+          <g class="comp" data-comp="wafer-stage">
+            <rect class="shape f-stg" x="586" y="642" width="138" height="26" rx="4"/>
+            <rect class="shape f-stg" x="740" y="642" width="120" height="26" rx="4"/>
+            <rect class="shape f-stg" x="560" y="668" width="320" height="22" rx="4"/>
+            <rect class="shape" x="600" y="628" width="110" height="6" rx="3" fill="#cfd8ea" stroke="#9fb0cf" stroke-width="1"/>
+          </g>
+          <text class="lbl-s" x="588" y="684">expose chuck</text>
+          <text class="lbl-s" x="744" y="684">measure chuck</text>
+          <text class="lbl" x="560" y="708" dy="-2"></text>
+
+          <!-- wafer clamp -->
+          <g class="comp" data-comp="clamp">
+            <rect class="shape f-stg" x="596" y="634" width="118" height="8" rx="2"/>
+          </g>
+          <text class="lbl-s" x="500" y="640">wafer clamp →</text>
+
+          <!-- sensors -->
+          <g class="comp" data-comp="sensors">
+            <rect class="shape f-stg" x="740" y="583" width="100" height="40" rx="6"/>
+            <line class="shape" x1="760" y1="623" x2="760" y2="636" stroke="rgba(56,217,169,.65)" stroke-width="1.4"/>
+            <line class="shape" x1="790" y1="623" x2="790" y2="636" stroke="rgba(56,217,169,.65)" stroke-width="1.4"/>
+            <line class="shape" x1="820" y1="623" x2="820" y2="636" stroke="rgba(56,217,169,.65)" stroke-width="1.4"/>
+          </g>
+          <text class="lbl-s" x="744" y="608">alignment / level sensors</text>
+
+          <!-- wafer handler -->
+          <g class="comp" data-comp="wafer-handler">
+            <rect class="shape f-stg" x="900" y="560" width="125" height="120" rx="10"/>
+            <circle class="shape" cx="945" cy="612" r="11" fill="none" stroke="rgba(56,217,169,.8)" stroke-width="2"/>
+            <line class="shape" x1="945" y1="612" x2="980" y2="588" stroke="rgba(56,217,169,.8)" stroke-width="2.5"/>
+            <rect class="shape f-stg" x="1008" y="590" width="16" height="44" rx="3"/>
+          </g>
+          <text class="lbl-s" x="906" y="582">wafer handler</text>
+          <text class="lbl-s" x="906" y="672">↔ track interface</text>
+
+          <!-- vacuum (sub-fab boxes + pipes) -->
+          <g class="comp" data-comp="vacuum">
+            <rect class="shape f-inf" x="440" y="772" width="180" height="42" rx="7"/>
+            <rect class="shape f-inf" x="518" y="690" width="11" height="82" rx="3"/>
+            <rect class="shape f-inf" x="652" y="772" width="190" height="42" rx="7"/>
+            <rect class="shape f-inf" x="730" y="690" width="11" height="82" rx="3"/>
+          </g>
+          <text class="lbl" x="452" y="798">Turbo &amp; dry pump farm</text>
+          <text class="lbl" x="664" y="798">H₂ supply &amp; abatement</text>
+
+          <!-- electronics cabinets -->
+          <g class="comp" data-comp="electronics">
+            <rect class="shape f-inf" x="1052" y="180" width="128" height="150" rx="9"/>
+            <rect class="shape f-inf" x="1052" y="345" width="128" height="150" rx="9"/>
+          </g>
+          <text class="lbl-s" x="1062" y="202">source &amp; laser power</text>
+          <text class="lbl-s" x="1062" y="367">stage / sensor racks</text>
+
+          <!-- software / compute -->
+          <g class="comp" data-comp="software">
+            <rect class="shape f-sw" x="1052" y="510" width="128" height="180" rx="9"/>
+            <polyline class="shape" points="1066,650 1090,620 1112,636 1142,592 1166,604" fill="none" stroke="rgba(105,219,124,.8)" stroke-width="2"/>
+          </g>
+          <text class="lbl-s" x="1062" y="532">compute &amp; control</text>
+          <text class="lbl-s" x="1062" y="546">comp. lithography</text>
+
+          <!-- ===== beams (drawn last, decorative) ===== -->
+          <polyline class="beam-co2" points="305,772 305,652 305,588"/>
+          <polyline class="beam-euv" points="305,578 303,490 346,418 428,260 548,172"/>
+          <polyline class="beam-euv" points="548,172 660,250 575,315 710,380 580,440 720,500 655,545 655,628"/>
+        </svg>
+      </div>
+      <div class="hint">
+        <span data-zh="悬停组件、左侧列表或成本条分段 · 点击固定信息面板 · 按 Esc 取消固定">Hover a component, a sidebar row, or a cost-bar segment · click to pin the intel panel · Esc to unpin</span>
+        <span id="hintPrice"></span>
+      </div>
+    </div>
+
+    <div class="costbar-wrap">
+      <div class="costbar-title" data-zh="整机价值占比估算（占光刻机成本的百分比 — 分析师估算；ASML 不披露物料清单）">Estimated share of system value (% of scanner cost — analyst estimates; ASML does not disclose BOM)</div>
+      <div class="costbar" id="costbar"></div>
+    </div>
+  </section>
+</main>
+
+<main id="procMain">
+  <aside id="stageList"></aside>
+  <section class="proc-stage">
+    <div id="procMini" class="minimap"></div>
+    <h2 id="procTitle"></h2>
+    <p id="procDesc" class="proc-desc"></p>
+    <div class="stats" id="procTotals"></div>
+    <div class="lanes">
+      <div class="lane" id="laneGfx">
+        <div class="lane-h" data-zh="阶段示意图 — 悬停图中部件：高亮并显示厂商与市场份额">Stage visualization — hover any part to highlight it and see makers &amp; market shares</div>
+        <div id="gfxBox"></div>
+      </div>
+      <div class="lane">
+        <div class="lane-h" data-zh="工艺流程（点击左侧按钮切换阶段）">Process flow (use the stage buttons to switch)</div>
+        <div class="flow" id="flowSteps"></div>
+      </div>
+      <div class="lane" id="laneEq">
+        <div class="lane-h" data-zh="设备与工具 — 悬停查看厂商、代码与单片晶圆贡献金额">Equipment &amp; tools — hover for makers, tickers and per-wafer $ contribution</div>
+        <div class="nodes" id="nodesEq"></div>
+      </div>
+      <div class="lane" id="laneMat">
+        <div class="lane-h" data-zh="材料与耗材 — 悬停查看厂商、代码与单片晶圆贡献金额">Materials &amp; consumables — hover for makers, tickers and per-wafer $ contribution</div>
+        <div class="nodes" id="nodesMat"></div>
+      </div>
+      <div class="lane" id="lanePie">
+        <div class="lane-h" data-zh="本阶段各公司市场份额（估算饼图）— 仅统计该阶段所需的设备与材料">Company market share for this stage (est. pie charts) — covering only this stage&rsquo;s equipment &amp; materials</div>
+        <div id="pieBox"></div>
+        <div class="pie-note" data-zh="份额为该阶段收入池的方向性估算（设备按折旧额加权、材料按支出额加权），综合公开市场研究；具体细分产品的份额见上方各部件的悬停窗口。">Directional estimates of each company&rsquo;s share of this stage&rsquo;s revenue pool (tools weighted by depreciation $, materials by spend $), compiled from public market research. Product-level shares appear in the hover panels above.</div>
+      </div>
+    </div>
+    <div class="proc-basis" data-zh="口径：以先进逻辑（3nm 级）300mm 晶圆为基准，代工均价约 $18–20k/片。材料金额 = 每片直接耗材支出；设备金额 = 每片隐含设备折旧（先进制程合计约 $5–7k/片）。所有数字为方向性分析师估算，随节点、产品与产能利用率变化；不构成投资建议。">Basis: leading-edge logic (3 nm-class) 300 mm wafer, foundry ASP ≈ $18–20k. Material $ = direct consumable spend per wafer; equipment $ = implied tool depreciation per wafer (≈$5–7k total at the leading edge). All figures are directional analyst estimates that vary with node, product and fab loading; not investment advice.</div>
+  </section>
+</main>
+
+<div id="tip">
+  <div class="tip-head">
+    <div class="tip-grp" id="tipGrp"></div>
+    <div class="tip-name" id="tipName"></div>
+    <div class="tip-cost"><span class="big" id="tipPct"></span><span class="rng" id="tipRng"></span></div>
+  </div>
+  <div class="tip-body" id="tipBody"></div>
+  <div class="tip-foot"><span id="tipFoot" data-zh="点击组件可固定 · Esc 关闭">Click component to pin · Esc to close</span><button class="tip-close" id="tipClose" data-zh="✕ 关闭">✕ close</button></div>
+</div>
+
+<footer>
+  <h2 data-zh="光刻机之外 — EUV 生态系统（不在整机物料清单内，却存在于每一片 EUV 晶圆中）">Beyond the scanner — the EUV ecosystem (not in the machine BOM, but in every EUV wafer)</h2>
+  <div class="cards">
+    <div class="card"><h3 data-zh="光刻胶与涂胶显影">Resist & Track</h3><p data-zh="<b>东京电子（TYO: 8035）</b>是唯一通过 EUV 验证的在线涂胶显影机（CLEAN TRACK LITHIUS Pro Z）供应商。化学放大光刻胶来自 <b>JSR</b>（已被 JIC 私有化；旗下拥有 Inpria 金属氧化物胶）、<b>东京应化 TOK（TYO: 4186）</b>、<b>信越化学（TYO: 4063）</b>、住友化学、杜邦。"><b>Tokyo Electron (TYO: 8035)</b> is the sole EUV-qualified inline coater/developer (CLEAN TRACK LITHIUS Pro Z). Chemically-amplified resists from <b>JSR</b> (taken private by JIC; owns Inpria metal-oxide resist), <b>TOK (TYO: 4186)</b>, <b>Shin-Etsu (TYO: 4063)</b>, Sumitomo Chemical, DuPont.</p></div>
+    <div class="card"><h3 data-zh="掩模制造工具链">Mask-Making Toolchain</h3><p data-zh="多束掩模光刻机：<b>IMS Nanofabrication</b>（英特尔控股；贝恩与台积电参股）与 <b>NuFlare（东芝旗下）</b>。光化（同波长）基板/图形检测：<b>Lasertec（TYO: 6920）</b> — 准垄断。掩模修复：蔡司 MeRiT。电子束复查：NuFlare、KLA（科磊）。">Multi-beam writers: <b>IMS Nanofabrication</b> (Intel-majority; Bain & TSMC minorities) and <b>NuFlare (Toshiba)</b>. Actinic (at-wavelength) blank/pattern inspection: <b>Lasertec (TYO: 6920)</b> — near-monopoly. Mask repair: ZEISS MeRiT. E-beam review: NuFlare, KLA.</p></div>
+    <div class="card"><h3 data-zh="量测与检测">Metrology & Inspection</h3><p data-zh="套刻/CD 反馈闭环依托 ASML <b>YieldStar</b>、<b>KLA（KLAC）</b>光学检测、<b>应用材料（AMAT）</b>与日立高新的 CD-SEM/电子束设备。计算闭环为每台光刻机拉动 ASML 软件附加收入。">Overlay/CD feedback loops via ASML <b>YieldStar</b>, <b>KLA (KLAC)</b> optical inspection, <b>Applied Materials (AMAT)</b> & Hitachi High-Tech CD-SEM/e-beam. Computational loop pulls through ASML software attach revenue per scanner.</p></div>
+    <div class="card"><h3 data-zh="服务与升级">Service & Upgrades</h3><p data-zh="EUV 可用率合约、集光镜更换、光源功率与产能升级包。ASML 装机管理业务约占收入 <b>25%</b>，且随 EUV 机队持续上升 — 下表每家公司背后的经常性收入引擎。">EUV availability contracts, collector swaps, source-power and throughput upgrade packages. ASML Installed Base Management ≈ <b>~25% of revenue</b> and rising with the EUV fleet — the recurring-revenue kicker on every system below.</p></div>
+  </div>
+
+  <h2 data-zh="上市公司敞口图谱（你真正能买到的标的）">Listed-equity exposure map (who you can actually own)</h2>
+  <table>
+    <thead><tr><th data-zh="公司">Company</th><th data-zh="上市信息">Listing</th><th data-zh="在 EUV 产业链中的角色">Role in the EUV chain</th><th data-zh="竞争格局">Competitive position</th></tr></thead>
+    <tbody>
+      <tr><td data-zh="ASML（阿斯麦）">ASML</td><td data-zh="纳斯达克 / 泛欧交易所: ASML">NASDAQ / Euronext: ASML</td><td data-zh="整机 OEM；旗下拥有 Cymer（光源）、ASML Berlin（吸盘/光学）、Brion（软件）">System OEM; owns Cymer (source), ASML Berlin (clamps/optics), Brion (software)</td><td data-zh="垄断 — 全球唯一 EUV 光刻机供应商">Monopoly — only EUV lithography supplier on earth</td></tr>
+      <tr><td data-zh="蔡司 SMT（Carl Zeiss SMT）">Carl Zeiss SMT</td><td data-zh="非上市（卡尔蔡司股份公司；ASML 持股 24.9%）">Private (Carl Zeiss AG; ASML holds 24.9%)</td><td data-zh="全部 EUV 光学：集光镜、照明系统、投影物镜">All EUV optics: collector, illuminator, projection optics</td><td data-zh="独家供应；全球 EUV 出货量的物理瓶颈">Sole source; physical bottleneck on EUV unit output</td></tr>
+      <tr><td data-zh="通快（TRUMPF）">TRUMPF</td><td data-zh="非上市（德国）">Private (Germany)</td><td data-zh="多 kW 级 CO₂ 驱动激光放大链（自身就有约 45 万个零件）">Multi-kW CO₂ drive-laser amplifier chain (~450k parts itself)</td><td data-zh="独家供应">Sole source</td></tr>
+      <tr><td data-zh="康宁（Corning）">Corning</td><td>NYSE: GLW</td><td data-zh="反射镜与掩模基板用 ULE® 零膨胀玻璃">ULE® zero-expansion glass for mirrors & mask substrates</td><td data-zh="与肖特 ZERODUR® 双寡头">Duopoly with SCHOTT Zerodur®</td></tr>
+      <tr><td data-zh="肖特（SCHOTT）">SCHOTT</td><td data-zh="非上市（卡尔蔡司基金会）">Private (Carl Zeiss Foundation)</td><td data-zh="ZERODUR® 玻璃陶瓷基板">ZERODUR® glass-ceramic substrates</td><td data-zh="与康宁双寡头">Duopoly with Corning</td></tr>
+      <tr><td data-zh="豪雅（Hoya）">Hoya</td><td>TYO: 7741</td><td data-zh="EUV 掩模基板">EUV mask blanks</td><td data-zh="与 AGC 双寡头">Duopoly with AGC</td></tr>
+      <tr><td>AGC</td><td>TYO: 5201</td><td data-zh="EUV 掩模基板">EUV mask blanks</td><td data-zh="与豪雅双寡头">Duopoly with Hoya</td></tr>
+      <tr><td>Lasertec</td><td>TYO: 6920</td><td data-zh="光化（同波长）EUV 掩模基板与图形检测（ACTIS）">Actinic EUV mask blank & pattern inspection (ACTIS)</td><td data-zh="准垄断">Near-monopoly</td></tr>
+      <tr><td data-zh="三井化学（Mitsui Chemicals）">Mitsui Chemicals</td><td>TYO: 4183</td><td data-zh="EUV 保护膜（ASML 授权生产）">EUV pellicles (ASML-licensed production)</td><td data-zh="领先商业供应商">Lead merchant supplier</td></tr>
+      <tr><td>Canatu</td><td>HEL: CANATU</td><td data-zh="碳纳米管保护膜（下一代、高透过率）">Carbon-nanotube pellicle membranes (next-gen, high transmission)</td><td data-zh="新兴挑战者">Emerging challenger</td></tr>
+      <tr><td data-zh="英特格（Entegris）">Entegris</td><td>NASDAQ: ENTG</td><td data-zh="EUV 掩模传送盒、过滤与流体处理">EUV reticle pods, filtration, fluid handling</td><td data-zh="与家登并列领先">Co-leader with Gudeng</td></tr>
+      <tr><td data-zh="家登精密（Gudeng）">Gudeng Precision</td><td>TWSE: 3680</td><td data-zh="EUV 掩模传送盒（台积电体系）">EUV reticle pods (TSMC-aligned)</td><td data-zh="与英特格并列领先">Co-leader with Entegris</td></tr>
+      <tr><td data-zh="东京电子（TEL）">Tokyo Electron</td><td>TYO: 8035</td><td data-zh="在线 EUV 涂胶显影机">Inline EUV coater/developer track</td><td data-zh="唯一通过验证">Sole qualified</td></tr>
+      <tr><td data-zh="东京应化（TOK）">TOK</td><td>TYO: 4186</td><td data-zh="EUV 光刻胶">EUV photoresists</td><td data-zh="前三（与 JSR、信越）">Top-3 (with JSR, Shin-Etsu)</td></tr>
+      <tr><td data-zh="信越化学（Shin-Etsu）">Shin-Etsu Chemical</td><td>TYO: 4063</td><td data-zh="EUV 光刻胶、掩模基板、硅片">EUV resists, mask substrates, silicon</td><td data-zh="前三">Top-3</td></tr>
+      <tr><td data-zh="阿特拉斯·科普柯（Edwards / Leybold）">Atlas Copco (Edwards / Leybold)</td><td>STO: ATCO-A</td><td data-zh="真空泵与尾气处理">Vacuum pumps & abatement</td><td data-zh="品类领导者（多源采购）">Leader, multi-source category</td></tr>
+      <tr><td data-zh="普发真空（Busch 集团）">Pfeiffer Vacuum (Busch Group)</td><td>ETR: PFV</td><td data-zh="涡轮分子泵">Turbomolecular pumps</td><td data-zh="关键供应商">Key supplier</td></tr>
+      <tr><td data-zh="荏原（Ebara）">Ebara</td><td>TYO: 6361</td><td data-zh="干泵与尾气处理">Dry pumps & gas abatement</td><td data-zh="关键供应商">Key supplier</td></tr>
+      <tr><td>AMETEK (Zygo)</td><td>NYSE: AME</td><td data-zh="位移干涉测量、精密光学计量">Displacement interferometry, precision optics metrology</td><td data-zh="关键供应商">Key supplier</td></tr>
+      <tr><td data-zh="是德科技（Keysight）">Keysight</td><td>NYSE: KEYS</td><td data-zh="激光干涉位置计量">Laser interferometer position metrology</td><td data-zh="关键供应商">Key supplier</td></tr>
+      <tr><td data-zh="京瓷（Kyocera）">Kyocera</td><td>TYO: 6971</td><td data-zh="先进陶瓷（工件台、传输系统）">Advanced ceramics (stages, handlers)</td><td data-zh="关键供应商（另有非上市的 CoorsTek）">Key supplier (with CoorsTek, private)</td></tr>
+      <tr><td data-zh="业纳（Jenoptik）">Jenoptik</td><td>ETR: JEN</td><td data-zh="半导体设备精密光学模块">Precision optical modules for semicon equipment</td><td data-zh="关键供应商">Key supplier</td></tr>
+      <tr><td data-zh="相干（Coherent）">Coherent</td><td>NYSE: COHR</td><td data-zh="CO₂ 激光光学（ZnSe）、光子学组件">CO₂-laser optics (ZnSe), photonics components</td><td data-zh="关键供应商">Key supplier</td></tr>
+      <tr><td data-zh="英美资源（元素六 Element Six）">Anglo American (Element Six)</td><td>LSE: AAL</td><td data-zh="高功率 CO₂ 级 CVD 金刚石窗口">CVD-diamond windows for high-power CO₂ stages</td><td data-zh="利基市场，替代者少">Niche, few alternatives</td></tr>
+      <tr><td data-zh="林德 / 液化空气 / 空气产品">Linde / Air Liquide / Air Products</td><td>LIN · EPA: AI · APD</td><td data-zh="氢气、激光气体、超纯气体">H₂, laser gases, ultra-pure gases</td><td data-zh="寡头品类">Oligopoly category</td></tr>
+      <tr><td data-zh="英伟达（NVIDIA）">NVIDIA</td><td>NASDAQ: NVDA</td><td data-zh="cuLitho GPU 加速计算光刻（联合 ASML、台积电、新思）">cuLitho GPU-accelerated computational lithography (with ASML, TSMC, Synopsys)</td><td data-zh="平台合作方">Platform partner</td></tr>
+      <tr><td data-zh="新思科技（Synopsys）">Synopsys</td><td>NASDAQ: SNPS</td><td data-zh="掩模综合 / OPC 软件">Mask synthesis / OPC software</td><td data-zh="与西门子 EDA 近似双寡头">Duopoly-ish with Siemens EDA</td></tr>
+      <tr><td data-zh="英特尔（IMS Nanofabrication）">Intel (IMS Nanofabrication)</td><td>NASDAQ: INTC</td><td data-zh="控股 IMS 多束掩模光刻机">Majority owner of IMS multi-beam mask writers</td><td data-zh="与 NuFlare（东芝）双寡头">Writer duopoly with NuFlare (Toshiba)</td></tr>
+      <tr><td>VDL Groep (VDL ETG)</td><td data-zh="非上市（荷兰）">Private (NL)</td><td data-zh="晶圆传输、框架、真空腔体 — 按图制造">Wafer handlers, frames, vacuum vessels — build-to-print</td><td data-zh="ASML 战略伙伴">Strategic ASML partner</td></tr>
+      <tr><td>Prodrive Technologies</td><td data-zh="非上市（荷兰）">Private (NL)</td><td data-zh="运动/驱动电子、机电一体化模块">Motion/drive electronics, mechatronic modules</td><td data-zh="ASML 战略伙伴">Strategic ASML partner</td></tr>
+      <tr><td>Neways Electronics</td><td data-zh="非上市（Infestos，荷兰）">Private (Infestos, NL)</td><td data-zh="电子制造；ASML 为其最大客户">Electronics manufacturing; ASML is largest customer</td><td data-zh="ASML 战略伙伴">Strategic ASML partner</td></tr>
+    </tbody>
+  </table>
+
+  <div class="disc" data-zh="<b>方法论与免责声明。</b>成本占比为方向性的分析师估算，综合自公开资料（ASML 投资者披露与供应商日材料、供应商年报、卖方拆解研究、行业媒体）。ASML 不公布物料清单；实际占比因机型配置、年份与汇率而异。图中欧元金额由估算占比乘以所选机型均价推得。EUV 掩模/保护膜、光刻胶与涂胶显影属于耗材/配套资本开支，由芯片制造商支付，不计入光刻机成本。本页内容不构成投资建议。编制于 2026 年 6 月。">
+    <b>Methodology & disclaimer.</b> Cost-share percentages are directional analyst estimates synthesized from public sources (ASML investor disclosures and supplier-day materials, supplier annual reports, sell-side teardown research, trade press). ASML does not publish a bill of materials; actual shares vary by configuration, year and currency. Component values shown in € are derived by applying the estimated share to the selected system ASP. EUV masks/pellicles, resist and track are consumables/adjacent capex paid by chipmakers, not part of scanner cost. Nothing here is investment advice. Compiled June 2026.
+  </div>
+</footer>
+
+<script>
+const PRICES = {
+  low:  { label:'NXE:3800E (Low-NA)',  zh:'NXE:3800E（Low-NA）',  eur:220 },
+  high: { label:'EXE:5200B (High-NA)', zh:'EXE:5200B（High-NA）', eur:380 }
+};
+let priceKey = 'low';
+
+const GROUPS = {
+  'Light Source':        { color:'var(--src)', raw:'#ffa94d', zh:'光源系统' },
+  'Optics':              { color:'var(--opt)', raw:'#b197fc', zh:'光学系统' },
+  'Stages & Handling':   { color:'var(--stg)', raw:'#38d9a9', zh:'工件台与传输' },
+  'Infrastructure':      { color:'var(--inf)', raw:'#748ffc', zh:'基础架构' },
+  'Compute & Software':  { color:'var(--sw)',  raw:'#69db7c', zh:'计算与软件' },
+  'Consumables (chipmaker-paid)': { color:'var(--con)', raw:'#f783ac', zh:'耗材（芯片厂商支付）' }
+};
+
+const C = [
+{ id:'drive-laser', name:'CO₂ Drive Laser & Beam Transport', group:'Light Source', pct:12, rng:'est. 10–14%',
+  desc:'A ~30 kW-class pulsed CO₂ laser (master oscillator + multi-stage power amplifiers) in the sub-fab fires paired pre-pulse / main-pulse shots at ~50,000 tin droplets per second. A vacuum beam line delivers the 10.6 µm beam up through the collector’s central aperture to the plasma point. The full source chain draws megawatt-class wall power — EUV conversion efficiency is only a few percent.',
+  vendors:[
+    {n:'TRUMPF', t:'Private · Germany', r:'Sole supplier of the multi-kW CO₂ amplifier chain (co-developed with Cymer/ASML); the laser alone has ~450,000 parts'},
+    {n:'Cymer (ASML)', t:'ASML · San Diego', r:'Source architecture, seed laser, system integration'},
+    {n:'Coherent', t:'NYSE: COHR', r:'CO₂/ZnSe optics ecosystem'}
+  ],
+  mats:['ZnSe transmissive optics','Water-cooled Cu mirrors','CVD diamond windows','CO₂/N₂/He laser gas','RF power stages'],
+  matv:[
+    {n:'Element Six (Anglo American)', t:'LSE: AAL', r:'Synthetic CVD-diamond windows for the high-power stages'},
+    {n:'Coherent (II-VI)', t:'NYSE: COHR', r:'ZnSe lenses and windows'},
+    {n:'Linde / Air Liquide', t:'LIN · EPA: AI', r:'Laser gases'}
+  ],
+  equip:[
+    {n:'TRUMPF Hüttinger', t:'Private', r:'RF generators powering the amplifiers'},
+    {n:'Ultra-precision diamond turning', t:'—', r:'For water-cooled copper optics'}
+  ],
+  hna:'Carries over architecturally to High-NA; the >500 W source-power roadmap drives amplifier upgrades rather than redesign.',
+  note:'Deepest private-company dependency in the BOM after Zeiss: there is no second source for the drive laser.'
+},
+{ id:'droplet', name:'Tin Droplet Generator', group:'Light Source', pct:2, rng:'est. 1–3%',
+  desc:'Ejects ~25 µm molten-tin droplets at ~80 m/s and 50 kHz with sub-micron targeting stability so each droplet meets the laser focus. A pre-pulse flattens the droplet into a pancake; the main pulse vaporizes it into EUV-emitting plasma. High-wear module, serviced frequently.',
+  vendors:[
+    {n:'Cymer (ASML)', t:'ASML', r:'Design and build; core source IP'},
+    {n:'Precision micro-machining partners', t:'—', r:'Nozzle fabrication (micro-EDM / laser drilling)'}
+  ],
+  mats:['High-purity tin (5N+)','Refractory-metal nozzles (Mo/W)','High-pressure Sn feed system'],
+  matv:[
+    {n:'5N Plus', t:'TSX: VNP', r:'High-purity metals refiner (representative Sn supplier)'},
+    {n:'Mitsubishi Materials', t:'TYO: 5711', r:'High-purity tin'},
+    {n:'Honeywell Electronic Materials', t:'NASDAQ: HON', r:'High-purity tin'}
+  ],
+  equip:[
+    {n:'Micro-EDM / femtosecond laser drilling', t:'—', r:'Nozzle orifice machining'},
+    {n:'High-speed droplet imaging metrology', t:'—', r:'Targeting calibration'}
+  ],
+  note:'Tin contamination management is the #1 driver of source availability — and of ASML’s recurring service revenue.'
+},
+{ id:'collector', name:'EUV Collector Mirror', group:'Light Source', pct:4, rng:'est. 3–5%',
+  desc:'~650 mm ellipsoidal multilayer mirror beneath the plasma; gathers 13.5 nm photons over a wide solid angle and refocuses them through the intermediate focus into the scanner. Tin debris degrades reflectivity despite in-situ hydrogen-radical cleaning, so collectors are swapped periodically — effectively the most expensive consumable inside the source.',
+  vendors:[
+    {n:'ZEISS SMT', t:'Private · ASML holds 24.9%', r:'Substrate figuring and Mo/Si multilayer coating'},
+    {n:'Cymer (ASML)', t:'ASML', r:'Module integration, debris-mitigation design'}
+  ],
+  mats:['Low-CTE glass-ceramic substrate','~50 Mo/Si bilayer pairs','Ru capping layer','H₂ radical cleaning flow'],
+  matv:[
+    {n:'SCHOTT (ZERODUR®)', t:'Private · Zeiss Foundation', r:'Zero-expansion substrate material'},
+    {n:'Corning (ULE®)', t:'NYSE: GLW', r:'Zero-expansion substrate material'}
+  ],
+  equip:[
+    {n:'Ion-beam figuring (IBF) systems', t:'—', r:'Sub-nm surface correction'},
+    {n:'Magnetron / ion-beam sputter coaters', t:'—', r:'Multilayer deposition'},
+    {n:'Zygo interferometry (AMETEK)', t:'NYSE: AME', r:'Figure metrology'}
+  ],
+  note:'Collector lifetime improvements flow almost directly into ASML service gross margin and fleet availability.'
+},
+{ id:'vessel', name:'Source Vessel & Plasma Chamber', group:'Light Source', pct:7, rng:'est. 5–9%',
+  desc:'Stainless vacuum vessel where the tin plasma flashes ~50,000 times per second at temperatures hotter than the sun’s surface. Hydrogen buffer gas and tin-catching vanes mitigate debris; molten tin is drained and EUV exits through the intermediate-focus aperture. Source power (250 W in HVM; 500 W roadmap) is the primary throughput lever.',
+  vendors:[
+    {n:'Cymer (ASML)', t:'ASML · acquired 2013 for ~$2.5bn', r:'Source design, build and field service'},
+    {n:'VDL ETG', t:'Private · NL', r:'Large vacuum vessel / module fabrication (build-to-print)'}
+  ],
+  mats:['Ultra-clean stainless steel','Tin-catch vanes & drains','H₂ buffer-gas management','Thermal & EMI management'],
+  matv:[
+    {n:'Linde / Air Liquide / Air Products', t:'LIN · AI · APD', r:'Hydrogen supply'},
+    {n:'Specialty stainless mills', t:'—', r:'Electropolished vacuum-grade steel'}
+  ],
+  equip:[
+    {n:'Large-bore vacuum welding / brazing', t:'—', r:'Vessel fabrication'},
+    {n:'He leak-test & bake-out stands', t:'—', r:'UHV qualification'}
+  ],
+  note:'Gigaphoton (Komatsu) abandoned its competing EUV source — there is no merchant alternative to the ASML/Cymer source.'
+},
+{ id:'illuminator', name:'Illumination Optics (Illuminator)', group:'Optics', pct:7, rng:'est. 6–9%',
+  desc:'Fly’s-eye arrays of field-facet and pupil-facet mirrors shape the raw EUV into programmable off-axis illumination pupils (source-mask optimization) and homogenize the arc-shaped slit that scans the reticle. Every reflection costs ~30% of the photons, so facet design and coating quality are throughput-critical.',
+  vendors:[
+    {n:'ZEISS SMT', t:'Private · ASML holds 24.9%', r:'Sole supplier — design, figuring, coating, module build'}
+  ],
+  mats:['ZERODUR®/ULE® facet substrates','Mo/Si + Ru coatings','Piezo facet actuators'],
+  matv:[
+    {n:'SCHOTT / Corning', t:'Private · GLW', r:'Zero-expansion substrates'},
+    {n:'Physik Instrumente (PI)', t:'Private · DE', r:'Piezo actuation'}
+  ],
+  equip:[
+    {n:'Ion-beam figuring, sputter coaters', t:'ZEISS in-house', r:'Facet fabrication'},
+    {n:'Multi-facet alignment stations', t:'ZEISS in-house', r:'Module assembly'}
+  ],
+  note:'Illuminator + POB together make the optical column ≈ a quarter to a third of system value — all of it Zeiss SMT content.'
+},
+{ id:'pob', name:'Projection Optics Box (POB)', group:'Optics', pct:20, rng:'est. 18–25%',
+  desc:'Six-mirror, 4×-reduction, NA 0.33 all-reflective objective — the single most valuable module in the machine. Mirror figure error is below ~50 picometres RMS: scaled to the size of Germany, the tallest bump would be under a millimetre. Aspheric/freeform mirrors sit in an actively positioned, milli-Kelvin thermally controlled frame.',
+  vendors:[
+    {n:'ZEISS SMT', t:'Private · ASML holds 24.9%', r:'Sole source — dedicated Oberkochen/Wetzlar fabs; multi-year lead times'}
+  ],
+  mats:['ULE®/ZERODUR® mirror blanks','Mo/Si multilayer stacks (~100 layers)','Ru capping','Invar/low-CTE mounts','Piezo & Lorentz actuators'],
+  matv:[
+    {n:'Corning', t:'NYSE: GLW', r:'ULE® glass blanks'},
+    {n:'SCHOTT', t:'Private', r:'ZERODUR® blanks'},
+    {n:'Heraeus Conamic', t:'Private · DE', r:'High-purity fused silica'}
+  ],
+  equip:[
+    {n:'Ion-beam figuring lines', t:'ZEISS in-house', r:'Months of polishing per mirror'},
+    {n:'EUV interferometric test towers', t:'ZEISS in-house', r:'“The most accurate rulers on earth”'},
+    {n:'Magnetron sputter coaters', t:'—', r:'Multilayer deposition'},
+    {n:'Zygo (AMETEK) interferometers', t:'NYSE: AME', r:'Surface metrology'}
+  ],
+  hna:'High-NA: 0.55 NA anamorphic optics (4×/8×) with mirrors up to ~1 m and a central obscuration. Optics content roughly doubles per tool — the main driver of the ~€350–400M EXE price.',
+  note:'Zeiss SMT mirror-polishing capacity is the physical rate-limiter on global EUV unit output; Oberkochen capex is a leading indicator.'
+},
+{ id:'reticle-stage', name:'Reticle Stage', group:'Stages & Handling', pct:5, rng:'est. 4–6%',
+  desc:'Magnetically levitated stage scanning the mask face-down, in vacuum, at 4× the wafer-stage velocity (matching the 4× optical reduction) with nanometre-class synchronization. Accelerations reach tens of g; position is measured continuously against the metrology frame by interferometers and encoders.',
+  vendors:[
+    {n:'ASML', t:'In-house (Veldhoven)', r:'Core mechatronics IP, design and assembly'},
+    {n:'Prodrive Technologies', t:'Private · NL', r:'Drive amplifiers & motion electronics'},
+    {n:'Zygo (AMETEK) / Keysight', t:'AME · KEYS', r:'Displacement interferometry'},
+    {n:'Heidenhain', t:'Private · DE', r:'Precision encoder gratings'}
+  ],
+  mats:['SiSiC ceramics','NdFeB magnet arrays','Zerodur encoder grid plates','Vacuum-rated cabling'],
+  matv:[
+    {n:'CoorsTek / Kyocera', t:'Private · TYO: 6971', r:'Advanced structural ceramics'},
+    {n:'NdFeB magnet chain', t:'China-dominated', r:'Rare-earth exposure in every scanner stage'}
+  ],
+  equip:[
+    {n:'Ceramic precision grinding', t:'—', r:'Stage structures'},
+    {n:'Laser-interferometric calibration rigs', t:'—', r:'Nanometre servo tuning'}
+  ],
+  hna:'EXE reticle stage accelerates substantially harder to hold throughput at the smaller exposure field.'
+},
+{ id:'mask', name:'EUV Reticle + Pellicle (consumable)', group:'Consumables (chipmaker-paid)', pct:null, rng:'not in scanner BOM — paid by chipmakers',
+  desc:'152×152 mm reflective mask: low-thermal-expansion glass, 40+ Mo/Si bilayers, Ru cap and a Ta-based absorber patterned by multi-beam e-beam writers. CNT or poly-Si pellicles (>90% transmission target) keep particles out of focus. A finished EUV mask runs ~$200–300k; a leading-edge logic mask set reaches tens of millions of dollars per design.',
+  vendors:[
+    {n:'Hoya / AGC', t:'TYO: 7741 · TYO: 5201', r:'Mask-blank duopoly'},
+    {n:'Corning / Shin-Etsu', t:'GLW · TYO: 4063', r:'LTEM substrates'},
+    {n:'Mitsui Chemicals', t:'TYO: 4183', r:'Pellicles (ASML-licensed production)'},
+    {n:'Canatu', t:'HEL: CANATU', r:'Carbon-nanotube pellicle membranes (next-gen)'},
+    {n:'Entegris / Gudeng', t:'ENTG · TWSE: 3680', r:'Dual-pod reticle carriers'},
+    {n:'DNP / Toppan', t:'TYO: 7912 · 7911', r:'Merchant mask shops (most leading-edge masks are made captive at TSMC/Samsung/Intel)'}
+  ],
+  mats:['LTEM glass substrate','Mo/Si multilayer','Ru cap','Ta-based absorber','CNT / poly-Si pellicle membrane'],
+  matv:[],
+  equip:[
+    {n:'IMS Nanofabrication', t:'Intel-majority; Bain & TSMC minority', r:'Multi-beam mask writers'},
+    {n:'NuFlare (Toshiba)', t:'Toshiba group', r:'Multi-beam mask writers'},
+    {n:'Lasertec ACTIS', t:'TYO: 6920', r:'Actinic inspection — near-monopoly'},
+    {n:'ZEISS MeRiT', t:'Private', r:'Mask repair'}
+  ],
+  note:'The “EUV mask complex” (Hoya, AGC, Lasertec, Mitsui Chemicals, IMS) is the cleanest listed pure-play exposure outside ASML itself.'
+},
+{ id:'reticle-handling', name:'Reticle Handler, Library & Load Ports', group:'Stages & Handling', pct:3, rng:'est. 2–4%',
+  desc:'Moves masks from dual-pod carriers through vacuum load-locks into the in-vacuum reticle library and onto the electrostatic stage chuck — with essentially zero particle adders. Because pellicles trade transmission for protection, particle-free reticle handling is existential for yield.',
+  vendors:[
+    {n:'ASML', t:'In-house design', r:'Architecture and qualification'},
+    {n:'VDL ETG', t:'Private · NL', r:'Build-to-print handler modules'},
+    {n:'Vacuum robotics merchants', t:'e.g. Brooks Automation (private)', r:'In-vacuum robot arms'}
+  ],
+  mats:['Electrostatic reticle chuck (ceramic/ULE)','Al / stainless vacuum structures','Ceramic end-effectors'],
+  matv:[
+    {n:'ASML Berlin (ex-Berliner Glas)', t:'ASML', r:'Precision chuck components'}
+  ],
+  equip:[
+    {n:'Cleanroom robotic test cells', t:'—', r:'Particle qualification'},
+  ]
+},
+{ id:'wafer-stage', name:'Wafer Stage (dual-chuck, maglev)', group:'Stages & Handling', pct:9, rng:'est. 8–12%',
+  desc:'Magnetically levitated planar-motor stage positioning 300 mm wafers with sub-nanometre moving-average error while accelerating at multiple g — in vacuum. Measure and expose chucks swap so wafer metrology (alignment, levelling) runs in parallel with exposure. Long-stroke maglev plus short-stroke Lorentz actuators, closed on encoder-grid metrology.',
+  vendors:[
+    {n:'ASML', t:'In-house (Veldhoven & Wilton, CT)', r:'Its deepest mechatronics IP'},
+    {n:'Prodrive Technologies', t:'Private · NL', r:'Amplifiers, motion control electronics'},
+    {n:'Zygo (AMETEK) / Keysight', t:'AME · KEYS', r:'Interferometric position metrology'},
+    {n:'Heidenhain', t:'Private · DE', r:'Encoder gratings / grid plates'}
+  ],
+  mats:['SiSiC / cordierite ceramics','NdFeB magnet arrays','Zerodur grid plates','Vacuum-compatible cable slabs'],
+  matv:[
+    {n:'CoorsTek / Kyocera', t:'Private · TYO: 6971', r:'Structural ceramics'},
+    {n:'VACUUMSCHMELZE', t:'Private · DE', r:'Magnetic materials'}
+  ],
+  equip:[
+    {n:'Ceramic grinding & lapping lines', t:'—', r:'Stage mirror blocks'},
+    {n:'Sub-nm interferometer calibration rigs', t:'—', r:'Servo qualification'}
+  ],
+  hna:'Stage acceleration is the throughput lever after source power — EXE stages run materially faster to offset the smaller field.'
+},
+{ id:'clamp', name:'Wafer Clamp / Wafer Table', group:'Stages & Handling', pct:2, rng:'est. 1–3%',
+  desc:'Micro-burled electrostatic clamp that flattens the wafer to nanometre level across 300 mm during exposure and manages the EUV thermal load for overlay stability. Burl tops are machined so a particle underneath does not print as a defocus spot.',
+  vendors:[
+    {n:'ASML Berlin (ex-Berliner Glas)', t:'ASML · acquired 2020', r:'Strategic sole source — the acquisition rationale'}
+  ],
+  mats:['Structured glass-ceramic','Wear-resistant coatings (e.g. DLC-class)','Electrode layers'],
+  matv:[
+    {n:'SCHOTT / Corning', t:'Private · GLW', r:'Glass-ceramic feedstock'}
+  ],
+  equip:[
+    {n:'Ultra-precision grinding & laser micro-structuring', t:'—', r:'Burl arrays'},
+    {n:'White-light interferometry', t:'—', r:'Flatness metrology'}
+  ],
+  note:'Clamp quality maps directly to overlay and defectivity at 2 nm-class nodes — why ASML vertically integrated it.'
+},
+{ id:'wafer-handler', name:'Wafer Handler & Load Locks', group:'Stages & Handling', pct:3, rng:'est. 2–4%',
+  desc:'Atmospheric and in-vacuum robots move wafers from the track interface through load-locks onto the chuck, with pre-alignment and thermal conditioning on the way. Mates inline with the (Tokyo Electron) coater/developer so resist-coated wafers flow in continuously.',
+  vendors:[
+    {n:'VDL ETG', t:'Private · NL', r:'Builds ASML wafer handlers — the classic build-to-print franchise'},
+    {n:'Vacuum robotics merchants', t:'—', r:'Robot arms and end-effectors'}
+  ],
+  mats:['Aluminium / stainless structures','Ceramic end-effectors','Thermal conditioning plates'],
+  matv:[],
+  equip:[
+    {n:'Particle & overlay qualification stands', t:'—', r:'Handler acceptance'}
+  ],
+  note:'VDL ETG revenue tracks ASML unit shipments almost one-for-one; private (VDL Groep).'
+},
+{ id:'sensors', name:'Alignment, Leveling & Image Sensors', group:'Stages & Handling', pct:6, rng:'est. 5–8%',
+  desc:'The scanner’s eyes: wafer alignment sensors, level/height sensors that map wafer topography ahead of exposure, plus chuck-level dose, aberration and aerial-image sensors used for calibration. These close the control loops that deliver sub-1.5 nm on-product overlay and stable focus.',
+  vendors:[
+    {n:'ASML', t:'In-house (Veldhoven / Wilton)', r:'Sensor architecture & integration'},
+    {n:'ASML Berlin', t:'ASML', r:'Precision optical components'},
+    {n:'Zygo (AMETEK)', t:'NYSE: AME', r:'Precision optics & metrology'},
+    {n:'Jenoptik', t:'ETR: JEN', r:'Semicon precision optics modules'}
+  ],
+  mats:['Precision gratings & optics','Photodiode / CMOS detectors','Stable opto-mechanics'],
+  matv:[],
+  equip:[
+    {n:'Optical test benches, vacuum cal chambers', t:'—', r:'Sensor qualification'}
+  ],
+  note:'Sensor/actuator density is why litho is often called “a mechatronics company with an optics problem” — and it feeds ASML’s YieldStar metrology pull-through.'
+},
+{ id:'vacuum', name:'Vacuum & Hydrogen System', group:'Infrastructure', pct:4, rng:'est. 3–5%',
+  desc:'EUV light is absorbed by everything — including air — so the whole optical path lives in high vacuum with a low-pressure hydrogen ambient that suppresses contamination and scrubs tin off surfaces. Dozens of turbomolecular and dry pumps, dynamic gas locks around reticle and wafer, and H₂ abatement in the sub-fab.',
+  vendors:[
+    {n:'Edwards Vacuum / Leybold (Atlas Copco)', t:'STO: ATCO-A', r:'Dry & turbo pumps, abatement'},
+    {n:'Pfeiffer Vacuum (Busch Group)', t:'ETR: PFV', r:'Turbomolecular pumps'},
+    {n:'Ebara', t:'TYO: 6361', r:'Dry pumps & gas abatement'}
+  ],
+  mats:['H₂ (Pa-level ambient)','Electropolished stainless lines','Dynamic gas-lock nozzles'],
+  matv:[
+    {n:'Linde / Air Liquide / Air Products', t:'LIN · AI · APD', r:'Hydrogen & ultra-pure gases'}
+  ],
+  equip:[
+    {n:'He leak detectors, RGA analyzers', t:'—', r:'UHV qualification'}
+  ],
+  note:'Vacuum and abatement names are steady picks-and-shovels exposure on every EUV install and every fab expansion.'
+},
+{ id:'frame', name:'Metrology Frame, Base Frame & Vibration Isolation', group:'Infrastructure', pct:5, rng:'est. 4–6%',
+  desc:'A sensor reference frame (“metro frame”) carries the projection optics and sensors, floating on active vibration isolation so the optical train sees sub-nanometre disturbance even while stages slam multi-g accelerations a metre away. The base frame sets ~180 t of machine onto active mounts on the fab floor.',
+  vendors:[
+    {n:'VDL ETG / NTS Group', t:'Private · NL', r:'Large frames & structures, build-to-print'},
+    {n:'Integrated Dynamics Engineering (IDE)', t:'Private · DE', r:'Active vibration isolation heritage'},
+    {n:'TNO', t:'NL research institute', r:'Co-development of precision structures'}
+  ],
+  mats:['Low-CTE castings & weldments','Active air/Lorentz mounts','Damping materials'],
+  matv:[],
+  equip:[
+    {n:'Large CMMs, modal test rigs', t:'—', r:'Structural qualification'}
+  ]
+},
+{ id:'electronics', name:'Power, Drive Electronics & Cabinets', group:'Infrastructure', pct:6, rng:'est. 5–8%',
+  desc:'Racks of servo amplifiers, motion controllers, sensor read-out and power distribution — thousands of boards and roughly two kilometres of cabling. Real-time control loops run at multi-kHz rates across on the order of 10⁵ I/O points.',
+  vendors:[
+    {n:'Prodrive Technologies', t:'Private · NL', r:'Flagship electronics/mechatronics supplier'},
+    {n:'Neways Electronics', t:'Private (Infestos) · NL', r:'EMS — ASML is its largest customer'}
+  ],
+  mats:['FPGAs (AMD/Xilinx, Altera)','Power semis (Infineon, ETR: IFX)','Connectors (TE Connectivity, NYSE: TEL)'],
+  matv:[],
+  equip:[
+    {n:'SMT lines, burn-in chambers', t:'—', r:'Board production & screening'}
+  ]
+},
+{ id:'software', name:'Control Software & Computational Lithography', group:'Compute & Software', pct:3, rng:'est. 2–4%',
+  desc:'Tens of millions of lines of code orchestrate the machine, and computational lithography (OPC, source-mask optimization — ASML Brion Tachyon) shapes what gets printed. GPU-accelerated mask correction (NVIDIA cuLitho, with TSMC and Synopsys) is collapsing OPC turnaround for 2 nm-class masks.',
+  vendors:[
+    {n:'ASML Brion', t:'ASML · in-house', r:'Tachyon OPC/SMO, scanner control'},
+    {n:'NVIDIA', t:'NASDAQ: NVDA', r:'cuLitho GPU acceleration partner'},
+    {n:'Synopsys', t:'NASDAQ: SNPS', r:'Mask synthesis / Proteus OPC'},
+    {n:'Siemens EDA', t:'ETR: SIE', r:'Calibre ecosystem interop'}
+  ],
+  mats:['GPU/HPC clusters','Real-time control compute'],
+  matv:[],
+  equip:[],
+  note:'Software, data and the YieldStar control loop carry ASML’s highest incremental margins — the hidden software business inside a hardware monopoly.'
+},
+{ id:'integration', name:'System Integration, Test & Qualification', group:'Infrastructure', pct:2, rng:'est. 1–3%',
+  desc:'Final assembly in Veldhoven’s EUV halls: weeks of vacuum pump-down, optics alignment and imaging/overlay qualification — then partial disassembly into ~40 freight containers moved by 20 trucks and three 747 freighters, and months of re-installation and re-qualification at the customer fab.',
+  vendors:[
+    {n:'ASML Veldhoven', t:'NASDAQ/AMS: ASML', r:'Final assembly, test, install & lifetime field service'}
+  ],
+  mats:['—'],
+  matv:[],
+  equip:[
+    {n:'Imaging & overlay qualification reticles/wafers', t:'—', r:'Factory acceptance testing'}
+  ],
+  note:'Install/service intensity is the moat’s annuity: ASML Installed Base Management is ≈25% of revenue and grows with the fleet.'
+}
+];
+
+/* ---------- Simplified Chinese translations ---------- */
+const ZH = {
+'drive-laser': {
+  name:'CO₂ 驱动激光器与光束传输系统', rng:'估算 10–14%',
+  desc:'位于地下层的约 30 kW 级脉冲 CO₂ 激光系统（主振荡器 + 多级功率放大器），以每秒约 5 万次的频率向锡液滴发射“预脉冲 + 主脉冲”组合。真空光束传输线将 10.6 µm 激光经集光镜中心孔径送达等离子体点。整套光源链路的墙插功耗达兆瓦级 — EUV 转换效率仅有百分之几。',
+  vendors:[
+    {n:'TRUMPF（通快）', t:'非上市 · 德国', r:'多 kW 级 CO₂ 放大链唯一供应商（与 Cymer/ASML 联合开发）；仅激光器本身就有约 45 万个零件'},
+    {n:'Cymer（ASML 旗下）', t:'ASML · 圣迭戈', r:'光源架构、种子激光与系统集成'},
+    {n:'Coherent（相干）', t:'NYSE: COHR', r:'CO₂/ZnSe 光学生态'}
+  ],
+  mats:['ZnSe 透射光学件','水冷铜镜','CVD 金刚石窗口','CO₂/N₂/He 激光气体','射频功率级'],
+  matv:[
+    {n:'Element Six（元素六，英美资源旗下）', t:'LSE: AAL', r:'高功率级 CVD 合成金刚石窗口'},
+    {n:'Coherent (II-VI)', t:'NYSE: COHR', r:'ZnSe 透镜与窗口'},
+    {n:'Linde / Air Liquide（林德/液化空气）', t:'LIN · EPA: AI', r:'激光气体'}
+  ],
+  equip:[
+    {n:'TRUMPF Hüttinger', t:'非上市', r:'驱动放大器的射频电源'},
+    {n:'超精密金刚石车削', t:'—', r:'用于水冷铜光学件'}
+  ],
+  hna:'架构上沿用至 High-NA；>500 W 光源功率路线图主要推动放大器升级而非重新设计。',
+  note:'除蔡司外 BOM 中最深的非上市公司依赖：驱动激光器没有第二供应商。'
+},
+'droplet': {
+  name:'锡液滴发生器', rng:'估算 1–3%',
+  desc:'以 50 kHz、约 80 m/s 喷射直径约 25 µm 的熔融锡液滴，瞄准稳定性达亚微米级，确保每颗液滴与激光焦点准确相遇。预脉冲先将液滴压成“薄饼”，主脉冲再将其汽化为发射 EUV 的等离子体。属高损耗模块，需频繁维护。',
+  vendors:[
+    {n:'Cymer（ASML 旗下）', t:'ASML', r:'设计与制造；光源核心 IP'},
+    {n:'精密微加工伙伴', t:'—', r:'喷嘴制造（微细电火花/激光打孔）'}
+  ],
+  mats:['高纯锡（5N+）','难熔金属喷嘴（钼/钨）','高压送锡系统'],
+  matv:[
+    {n:'5N Plus', t:'TSX: VNP', r:'高纯金属精炼商（代表性锡供应商）'},
+    {n:'Mitsubishi Materials（三菱材料）', t:'TYO: 5711', r:'高纯锡'},
+    {n:'Honeywell（霍尼韦尔电子材料）', t:'NASDAQ: HON', r:'高纯锡'}
+  ],
+  equip:[
+    {n:'微细电火花/飞秒激光打孔', t:'—', r:'喷嘴孔加工'},
+    {n:'高速液滴成像计量', t:'—', r:'瞄准标定'}
+  ],
+  note:'锡污染管理是光源可用率的第一大变量 — 也是 ASML 经常性服务收入的来源。'
+},
+'collector': {
+  name:'EUV 集光镜', rng:'估算 3–5%',
+  desc:'位于等离子体下方、直径约 650 mm 的椭球面多层膜反射镜；在大立体角范围内收集 13.5 nm 光子，并经中间焦点重新聚焦送入光刻机主体。尽管有原位氢自由基清洁，锡碎屑仍会使反射率衰减，因此集光镜需定期更换 — 实质上是光源内部最昂贵的“耗材”。',
+  vendors:[
+    {n:'ZEISS SMT（蔡司）', t:'非上市 · ASML 持股 24.9%', r:'基板面形加工与 Mo/Si 多层膜镀膜'},
+    {n:'Cymer（ASML 旗下）', t:'ASML', r:'模块集成与碎屑抑制设计'}
+  ],
+  mats:['低热膨胀玻璃陶瓷基板','约 50 对 Mo/Si 双层膜','Ru 保护层','H₂ 自由基清洁气流'],
+  matv:[
+    {n:'SCHOTT（肖特，ZERODUR®）', t:'非上市 · 蔡司基金会', r:'零膨胀基板材料'},
+    {n:'Corning（康宁，ULE®）', t:'NYSE: GLW', r:'零膨胀基板材料'}
+  ],
+  equip:[
+    {n:'离子束修形（IBF）设备', t:'—', r:'亚纳米级面形修正'},
+    {n:'磁控/离子束溅射镀膜机', t:'—', r:'多层膜沉积'},
+    {n:'Zygo 干涉仪（AMETEK）', t:'NYSE: AME', r:'面形计量'}
+  ],
+  note:'集光镜寿命的改善几乎直接转化为 ASML 服务毛利与机队可用率。'
+},
+'vessel': {
+  name:'光源腔体与等离子体室', rng:'估算 5–9%',
+  desc:'不锈钢真空腔体，锡等离子体在其中以每秒约 5 万次的频率闪爆，温度超过太阳表面。氢气缓冲气体与捕锡板抑制碎屑；熔锡被引流排出，EUV 经中间焦点孔径射出。光源功率（量产 250 W；路线图 500 W）是产能的第一杠杆。',
+  vendors:[
+    {n:'Cymer（ASML 旗下）', t:'ASML · 2013 年以约 25 亿美元收购', r:'光源设计、制造与现场服务'},
+    {n:'VDL ETG', t:'非上市 · 荷兰', r:'大型真空腔体/模块代工（按图制造）'}
+  ],
+  mats:['超洁净不锈钢','捕锡板与排锡通道','H₂ 缓冲气体管理','热管理与电磁屏蔽'],
+  matv:[
+    {n:'Linde / Air Liquide / Air Products（林德/液化空气/空气产品）', t:'LIN · AI · APD', r:'氢气供应'},
+    {n:'特种不锈钢厂', t:'—', r:'电解抛光真空级钢材'}
+  ],
+  equip:[
+    {n:'大口径真空焊接/钎焊', t:'—', r:'腔体制造'},
+    {n:'氦检漏与烘烤台架', t:'—', r:'超高真空验证'}
+  ],
+  note:'Gigaphoton（小松旗下）已放弃竞争性 EUV 光源研发 — ASML/Cymer 光源不存在第三方替代。'
+},
+'illuminator': {
+  name:'照明光学系统', rng:'估算 6–9%',
+  desc:'由“场分面 + 光瞳分面”复眼镜阵列将原始 EUV 整形为可编程的离轴照明光瞳（光源-掩模协同优化），并将弧形扫描狭缝均匀化。每次反射损失约 30% 的光子，因此分面设计与镀膜质量直接决定产能。',
+  vendors:[
+    {n:'ZEISS SMT（蔡司）', t:'非上市 · ASML 持股 24.9%', r:'独家供应 — 设计、面形加工、镀膜与模块组装'}
+  ],
+  mats:['ZERODUR®/ULE® 分面基板','Mo/Si + Ru 镀膜','压电分面致动器'],
+  matv:[
+    {n:'SCHOTT / Corning（肖特/康宁）', t:'非上市 · GLW', r:'零膨胀基板'},
+    {n:'Physik Instrumente (PI)', t:'非上市 · 德国', r:'压电致动'}
+  ],
+  equip:[
+    {n:'离子束修形、溅射镀膜机', t:'蔡司自有', r:'分面制造'},
+    {n:'多分面对准工作站', t:'蔡司自有', r:'模块装配'}
+  ],
+  note:'照明系统 + 投影物镜使光学链合计约占整机价值四分之一到三分之一 — 全部为蔡司 SMT 份额。'
+},
+'pob': {
+  name:'投影物镜系统（POB）', rng:'估算 18–25%',
+  desc:'六镜、4× 缩小、NA 0.33 的全反射物镜 — 整机中价值最高的单一模块。镜面面形误差低于约 50 皮米 RMS：若把镜子放大到德国国土面积，最高的“凸起”不足 1 毫米。非球面/自由曲面反射镜安装在主动定位、毫开尔文级温控的框架中。',
+  vendors:[
+    {n:'ZEISS SMT（蔡司）', t:'非上市 · ASML 持股 24.9%', r:'独家供应 — 上科亨/韦茨拉尔专属工厂；交付周期以年计'}
+  ],
+  mats:['ULE®/ZERODUR® 镜坯','Mo/Si 多层膜（约 100 层）','Ru 保护层','殷钢/低膨胀支座','压电与洛伦兹致动器'],
+  matv:[
+    {n:'Corning（康宁）', t:'NYSE: GLW', r:'ULE® 玻璃镜坯'},
+    {n:'SCHOTT（肖特）', t:'非上市', r:'ZERODUR® 镜坯'},
+    {n:'Heraeus Conamic（贺利氏）', t:'非上市 · 德国', r:'高纯熔融石英'}
+  ],
+  equip:[
+    {n:'离子束修形产线', t:'蔡司自有', r:'单片镜面抛光以月计'},
+    {n:'EUV 干涉测试塔', t:'蔡司自有', r:'“地球上最精确的尺子”'},
+    {n:'磁控溅射镀膜机', t:'—', r:'多层膜沉积'},
+    {n:'Zygo（AMETEK）干涉仪', t:'NYSE: AME', r:'表面计量'}
+  ],
+  hna:'High-NA：0.55 NA 变形光学（4×/8×），最大镜片接近 1 米并带中心遮拦。单机光学价值量大约翻倍 — 是 EXE 约 €3.5–4 亿售价的主要驱动因素。',
+  note:'蔡司 SMT 的镜面抛光产能是全球 EUV 出货量的物理瓶颈；上科亨工厂的资本开支是领先指标。'
+},
+'reticle-stage': {
+  name:'掩模台', rng:'估算 4–6%',
+  desc:'磁悬浮工件台，掩模面朝下在真空中以晶圆台 4 倍的速度扫描（对应 4× 光学缩小），同步误差达纳米级。加速度达数十 g；位置由干涉仪与光栅相对计量框架连续测量。',
+  vendors:[
+    {n:'ASML', t:'自制（费尔德霍芬）', r:'核心机电一体化 IP、设计与装配'},
+    {n:'Prodrive Technologies', t:'非上市 · 荷兰', r:'驱动放大器与运动控制电子'},
+    {n:'Zygo (AMETEK) / Keysight（是德科技）', t:'AME · KEYS', r:'位移干涉测量'},
+    {n:'Heidenhain（海德汉）', t:'非上市 · 德国', r:'精密光栅'}
+  ],
+  mats:['SiSiC 陶瓷','钕铁硼磁体阵列','Zerodur 光栅基准板','真空级线缆'],
+  matv:[
+    {n:'CoorsTek / Kyocera（京瓷）', t:'非上市 · TYO: 6971', r:'先进结构陶瓷'},
+    {n:'钕铁硼磁体供应链', t:'中国主导', r:'每台光刻机工件台中的稀土敞口'}
+  ],
+  equip:[
+    {n:'陶瓷精密磨削', t:'—', r:'台体结构'},
+    {n:'激光干涉标定台架', t:'—', r:'纳米级伺服调校'}
+  ],
+  hna:'EXE 掩模台加速度大幅提高，以在更小曝光场下维持产能。'
+},
+'mask': {
+  name:'EUV 掩模 + 保护膜（耗材）', rng:'不计入光刻机 BOM — 由芯片制造商支付',
+  desc:'152×152 mm 反射式掩模：低热膨胀玻璃基板、40 层以上 Mo/Si 多层膜、Ru 保护层与钽基吸收层，由多束电子束光刻机写制图形。碳纳米管或多晶硅保护膜（目标透过率 >90%）将颗粒挡在焦平面之外。单片成品 EUV 掩模约 20–30 万美元；先进逻辑芯片一套掩模可达数千万美元。',
+  vendors:[
+    {n:'Hoya / AGC（豪雅 / AGC）', t:'TYO: 7741 · TYO: 5201', r:'掩模基板双寡头'},
+    {n:'Corning / Shin-Etsu（康宁/信越）', t:'GLW · TYO: 4063', r:'低热膨胀（LTEM）基板'},
+    {n:'Mitsui Chemicals（三井化学）', t:'TYO: 4183', r:'保护膜（ASML 授权生产）'},
+    {n:'Canatu', t:'HEL: CANATU', r:'碳纳米管保护膜（下一代）'},
+    {n:'Entegris / Gudeng（英特格/家登精密）', t:'ENTG · TWSE: 3680', r:'双层掩模传送盒'},
+    {n:'DNP / Toppan（大日本印刷/凸版）', t:'TYO: 7912 · 7911', r:'商业掩模厂（最先进掩模多由台积电/三星/英特尔自制）'}
+  ],
+  mats:['LTEM 玻璃基板','Mo/Si 多层膜','Ru 保护层','钽基吸收层','CNT/多晶硅保护膜'],
+  equip:[
+    {n:'IMS Nanofabrication', t:'英特尔控股；贝恩与台积电参股', r:'多束掩模光刻机'},
+    {n:'NuFlare（东芝旗下）', t:'东芝集团', r:'多束掩模光刻机'},
+    {n:'Lasertec ACTIS', t:'TYO: 6920', r:'光化（13.5 nm 同波长）检测 — 准垄断'},
+    {n:'ZEISS MeRiT', t:'非上市', r:'掩模修复'}
+  ],
+  note:'“EUV 掩模复合体”（豪雅、AGC、Lasertec、三井化学、IMS）是 ASML 之外最纯粹的上市 EUV 标的群。'
+},
+'reticle-handling': {
+  name:'掩模传输、库存与装载端口', rng:'估算 2–4%',
+  desc:'将掩模从双层掩模盒经真空负载锁送入真空内掩模库并装上静电卡盘 — 全程近乎零颗粒增加。由于保护膜以透过率换取保护，颗粒零增加的掩模传输对良率而言生死攸关。',
+  vendors:[
+    {n:'ASML', t:'自有设计', r:'架构与验证'},
+    {n:'VDL ETG', t:'非上市 · 荷兰', r:'按图制造的传输模块'},
+    {n:'真空机器人厂商', t:'如 Brooks Automation（非上市）', r:'真空内机械臂'}
+  ],
+  mats:['静电掩模卡盘（陶瓷/ULE）','铝/不锈钢真空结构','陶瓷末端执行器'],
+  matv:[
+    {n:'ASML Berlin（原 Berliner Glas）', t:'ASML', r:'精密卡盘部件'}
+  ],
+  equip:[
+    {n:'洁净室机器人测试舱', t:'—', r:'颗粒验证'}
+  ]
+},
+'wafer-stage': {
+  name:'晶圆台（双卡盘磁悬浮）', rng:'估算 8–12%',
+  desc:'磁悬浮平面电机工件台，在真空中以数 g 加速度运动，同时将 300 mm 晶圆定位到亚纳米级移动平均误差。测量与曝光双卡盘交换，使晶圆计量（对准、调平）与曝光并行。长行程磁悬浮 + 短行程洛伦兹致动器，基于光栅网格计量闭环。',
+  vendors:[
+    {n:'ASML', t:'自制（费尔德霍芬与美国康州威尔顿）', r:'其最深的机电一体化 IP'},
+    {n:'Prodrive Technologies', t:'非上市 · 荷兰', r:'放大器与运动控制电子'},
+    {n:'Zygo (AMETEK) / Keysight（是德科技）', t:'AME · KEYS', r:'干涉式位置计量'},
+    {n:'Heidenhain（海德汉）', t:'非上市 · 德国', r:'光栅网格板'}
+  ],
+  mats:['SiSiC/堇青石陶瓷','钕铁硼磁体阵列','Zerodur 网格板','真空兼容线缆排'],
+  matv:[
+    {n:'CoorsTek / Kyocera（京瓷）', t:'非上市 · TYO: 6971', r:'结构陶瓷'},
+    {n:'VACUUMSCHMELZE', t:'非上市 · 德国', r:'磁性材料'}
+  ],
+  equip:[
+    {n:'陶瓷磨削与研磨产线', t:'—', r:'台体镜块'},
+    {n:'亚纳米干涉标定台架', t:'—', r:'伺服验证'}
+  ],
+  hna:'光源功率之后，工件台加速度就是产能杠杆 — EXE 工件台显著提速以抵消更小的曝光场。'
+},
+'clamp': {
+  name:'晶圆吸盘 / 晶圆台面', rng:'估算 1–3%',
+  desc:'微凸点结构静电吸盘，曝光期间将 300 mm 晶圆压平至纳米级，并管理 EUV 热负载以保证套刻稳定。凸点顶面经精密加工，使其下方的颗粒不会表现为离焦点。',
+  vendors:[
+    {n:'ASML Berlin（原 Berliner Glas）', t:'ASML · 2020 年收购', r:'战略性独家来源 — 即收购动机本身'}
+  ],
+  mats:['微结构玻璃陶瓷','耐磨涂层（类 DLC）','电极层'],
+  matv:[
+    {n:'SCHOTT / Corning（肖特/康宁）', t:'非上市 · GLW', r:'玻璃陶瓷原料'}
+  ],
+  equip:[
+    {n:'超精密磨削与激光微结构加工', t:'—', r:'凸点阵列'},
+    {n:'白光干涉仪', t:'—', r:'平面度计量'}
+  ],
+  note:'吸盘品质直接映射到 2 nm 级节点的套刻与缺陷率 — 这正是 ASML 将其垂直整合的原因。'
+},
+'wafer-handler': {
+  name:'晶圆传输与负载锁', rng:'估算 2–4%',
+  desc:'大气与真空机械手将晶圆从涂胶显影机接口经负载锁送上卡盘，途中完成预对准与温度调理。与（东京电子）涂胶显影机在线对接，涂胶晶圆连续流入。',
+  vendors:[
+    {n:'VDL ETG', t:'非上市 · 荷兰', r:'为 ASML 制造晶圆传输系统 — 经典按图代工业务'},
+    {n:'真空机器人厂商', t:'—', r:'机械臂与末端执行器'}
+  ],
+  mats:['铝/不锈钢结构','陶瓷末端执行器','温度调理板'],
+  equip:[
+    {n:'颗粒与套刻验证台', t:'—', r:'传输系统验收'}
+  ],
+  note:'VDL ETG 收入与 ASML 出货量几乎一比一联动；非上市（VDL 集团）。'
+},
+'sensors': {
+  name:'对准、调平与成像传感器', rng:'估算 5–8%',
+  desc:'光刻机的“眼睛”：晶圆对准传感器、在曝光前测绘晶圆形貌的调平/高度传感器，以及用于标定的卡盘级剂量、像差与空间像传感器。它们构成的闭环控制实现 1.5 nm 以内的产品套刻精度与稳定焦深。',
+  vendors:[
+    {n:'ASML', t:'自制（费尔德霍芬/威尔顿）', r:'传感器架构与集成'},
+    {n:'ASML Berlin', t:'ASML', r:'精密光学组件'},
+    {n:'Zygo (AMETEK)', t:'NYSE: AME', r:'精密光学与计量'},
+    {n:'Jenoptik（业纳）', t:'ETR: JEN', r:'半导体精密光学模块'}
+  ],
+  mats:['精密光栅与光学件','光电二极管/CMOS 探测器','稳定光机结构'],
+  equip:[
+    {n:'光学测试台、真空标定舱', t:'—', r:'传感器验证'}
+  ],
+  note:'传感器/致动器密度正是“光刻是一家带着光学难题的机电一体化公司”之说的由来 — 同时拉动 ASML YieldStar 量测业务。'
+},
+'vacuum': {
+  name:'真空与氢气系统', rng:'估算 3–5%',
+  desc:'EUV 光会被一切物质吸收 — 包括空气 — 因此整条光路置于高真空中，并维持低压氢气氛围以抑制污染、清除表面锡沉积。数十台涡轮分子泵与干泵、掩模与晶圆周边的动态气锁，以及地下层的氢气尾气处理。',
+  vendors:[
+    {n:'Edwards / Leybold（爱德华兹/莱宝，阿特拉斯·科普柯旗下）', t:'STO: ATCO-A', r:'干泵、涡轮泵与尾气处理'},
+    {n:'Pfeiffer Vacuum（普发真空，Busch 集团）', t:'ETR: PFV', r:'涡轮分子泵'},
+    {n:'Ebara（荏原）', t:'TYO: 6361', r:'干泵与尾气处理'}
+  ],
+  mats:['H₂（帕级氛围）','电解抛光不锈钢管路','动态气锁喷嘴'],
+  matv:[
+    {n:'Linde / Air Liquide / Air Products（林德/液化空气/空气产品）', t:'LIN · AI · APD', r:'氢气与超纯气体'}
+  ],
+  equip:[
+    {n:'氦检漏仪、残余气体分析仪', t:'—', r:'超高真空验证'}
+  ],
+  note:'真空与尾气处理标的是每台 EUV 装机和每次扩产的稳健“铲子股”。'
+},
+'frame': {
+  name:'计量框架、基座框架与隔振系统', rng:'估算 4–6%',
+  desc:'传感基准框架（“计量框架”）承载投影物镜与传感器，悬浮在主动隔振系统上，即使一米开外工件台以数 g 加速度往复，光学链所见扰动仍在亚纳米级。基座框架将约 180 吨整机置于洁净室地面的主动支承上。',
+  vendors:[
+    {n:'VDL ETG / NTS Group', t:'非上市 · 荷兰', r:'大型框架与结构件，按图制造'},
+    {n:'Integrated Dynamics Engineering (IDE)', t:'非上市 · 德国', r:'主动隔振技术积累'},
+    {n:'TNO', t:'荷兰研究机构', r:'精密结构联合研发'}
+  ],
+  mats:['低膨胀铸件与焊接件','主动空气/洛伦兹支承','阻尼材料'],
+  equip:[
+    {n:'大型三坐标测量机、模态试验台', t:'—', r:'结构验证'}
+  ]
+},
+'electronics': {
+  name:'电源、驱动电子与机柜', rng:'估算 5–8%',
+  desc:'成排机柜装载伺服放大器、运动控制器、传感器读出与配电系统 — 数千块电路板、约两公里线缆。实时控制环路以数 kHz 速率运行，I/O 点位达十万量级。',
+  vendors:[
+    {n:'Prodrive Technologies', t:'非上市 · 荷兰', r:'旗舰级电子/机电一体化供应商'},
+    {n:'Neways Electronics', t:'非上市（Infestos）· 荷兰', r:'EMS 代工 — ASML 为其最大客户'}
+  ],
+  mats:['FPGA（AMD/赛灵思、Altera）','功率半导体（英飞凌，ETR: IFX）','连接器（泰科电子，NYSE: TEL）'],
+  equip:[
+    {n:'SMT 产线、老化测试舱', t:'—', r:'电路板生产与筛选'}
+  ]
+},
+'software': {
+  name:'控制软件与计算光刻', rng:'估算 2–4%',
+  desc:'数千万行代码协调整机运转；计算光刻（OPC、光源-掩模协同优化 — ASML Brion Tachyon）决定最终成像。GPU 加速掩模修正（英伟达 cuLitho，联合台积电与新思科技）正在大幅压缩 2 nm 级掩模的 OPC 计算周期。',
+  vendors:[
+    {n:'ASML Brion', t:'ASML 自有', r:'Tachyon OPC/SMO 与整机控制'},
+    {n:'NVIDIA（英伟达）', t:'NASDAQ: NVDA', r:'cuLitho GPU 加速合作方'},
+    {n:'Synopsys（新思科技）', t:'NASDAQ: SNPS', r:'掩模综合 / Proteus OPC'},
+    {n:'Siemens EDA（西门子）', t:'ETR: SIE', r:'Calibre 生态互操作'}
+  ],
+  mats:['GPU/HPC 集群','实时控制计算'],
+  note:'软件、数据与 YieldStar 闭环是 ASML 边际利润率最高的业务 — 硬件垄断里隐藏的软件公司。'
+},
+'integration': {
+  name:'系统集成、测试与出厂验证', rng:'估算 1–3%',
+  desc:'在费尔德霍芬 EUV 总装大厅完成总装：数周的真空抽气、光学对准与成像/套刻验证 — 随后部分拆解为约 40 个集装箱，由 20 辆卡车和三架波音 747 货机运输，再在客户晶圆厂经历数月的重新安装与验证。',
+  vendors:[
+    {n:'ASML 费尔德霍芬', t:'NASDAQ/AMS: ASML', r:'总装、测试、安装与全生命周期现场服务'}
+  ],
+  mats:['—'],
+  equip:[
+    {n:'成像与套刻验证掩模/晶圆', t:'—', r:'出厂验收测试'}
+  ],
+  note:'安装/服务强度构成护城河的年金：ASML 装机管理业务约占收入 25%，并随机队增长。'
+}
+};
+
+const SVG_ZH = {
+  'SUB-FAB LEVEL':'地下层（SUB-FAB）',
+  'FAB FLOOR':'洁净室地面',
+  'CO₂ drive laser (10.6 µm)':'CO₂ 驱动激光（10.6 µm）',
+  'EUV light (13.5 nm) — in vacuum, mirrors only':'EUV 光（13.5 nm）— 全真空、全反射式',
+  'Stylized cross-section — not to scale':'示意剖面图 — 非等比例',
+  'Vacuum enclosure / system envelope — hover edge: final assembly & qualification':'真空主体框架 — 悬停边框查看：总装与出厂验证',
+  'Base frame · active vibration isolation':'基座框架 · 主动隔振',
+  'Metrology frame':'计量框架',
+  'EUV source vessel · Sn plasma':'EUV 光源腔体 · 锡等离子体',
+  'intermediate focus':'中间焦点',
+  'collector mirror':'集光镜',
+  'tin droplet generator':'锡液滴发生器',
+  'CO₂ drive laser — TRUMPF (sub-fab)':'CO₂ 驱动激光 — 通快 TRUMPF（地下层）',
+  'Illuminator — ZEISS':'照明系统 — 蔡司',
+  'Projection optics (6-mirror, 4×) — ZEISS':'投影物镜（6 镜、4×）— 蔡司',
+  'Reticle stage (maglev, scans 4×)':'掩模台（磁悬浮，4× 速度扫描）',
+  'EUV mask + pellicle':'EUV 掩模 + 保护膜',
+  'Reticle handler · pod load ports':'掩模传输 · 掩模盒装载端口',
+  'expose chuck':'曝光卡盘',
+  'measure chuck':'测量卡盘',
+  'wafer clamp →':'晶圆吸盘 →',
+  'alignment / level sensors':'对准/调平传感器',
+  'wafer handler':'晶圆传输机械手',
+  '↔ track interface':'↔ 涂胶显影机接口',
+  'Turbo & dry pump farm':'涡轮泵与干泵组',
+  'H₂ supply & abatement':'H₂ 供应与尾气处理',
+  'source & laser power':'光源与激光供电',
+  'stage / sensor racks':'工件台/传感器机柜',
+  'compute & control':'计算与控制',
+  'comp. lithography':'计算光刻'
+};
+
+let lang = 'en';
+function T(en,zh){ return lang==='zh' ? zh : en; }
+function CF(c,f){ const z = ZH[c.id]; return (lang==='zh' && z && z[f]!==undefined) ? z[f] : c[f]; }
+function GN(g){ return lang==='zh' ? GROUPS[g].zh : g; }
+function priceLabel(){ const p = PRICES[priceKey]; return lang==='zh' ? p.zh : p.label; }
+
+/* High-NA (EXE) cost-share estimates: optics content roughly doubles vs Low-NA,
+   stages accelerate harder, frame/install grow — source carries over, so its share dilutes. */
+const HIGH_NA = {
+  'drive-laser':      { pct:8,  rng:'7–10%'  },
+  'droplet':          { pct:2,  rng:'1–3%'   },
+  'collector':        { pct:3,  rng:'2–4%'   },
+  'vessel':           { pct:4,  rng:'3–6%'   },
+  'illuminator':      { pct:8,  rng:'7–10%'  },
+  'pob':              { pct:27, rng:'24–32%' },
+  'reticle-stage':    { pct:6,  rng:'5–7%'   },
+  'reticle-handling': { pct:2,  rng:'2–3%'   },
+  'wafer-stage':      { pct:10, rng:'9–13%'  },
+  'clamp':            { pct:2,  rng:'1–3%'   },
+  'wafer-handler':    { pct:2,  rng:'2–3%'   },
+  'sensors':          { pct:6,  rng:'5–8%'   },
+  'vacuum':           { pct:4,  rng:'3–5%'   },
+  'frame':            { pct:5,  rng:'4–7%'   },
+  'electronics':      { pct:5,  rng:'4–7%'   },
+  'software':         { pct:3,  rng:'2–4%'   },
+  'integration':      { pct:3,  rng:'2–4%'   }
+};
+function P(c){ return (priceKey==='high' && HIGH_NA[c.id]) ? HIGH_NA[c.id].pct : c.pct; }
+function rngText(c){
+  if(c.pct==null) return CF(c,'rng');
+  if(priceKey==='high' && HIGH_NA[c.id]) return T('est. ','估算 ')+HIGH_NA[c.id].rng+T(' (High-NA basis)','（High-NA 口径）');
+  return CF(c,'rng');
+}
+
+const byId = Object.fromEntries(C.map(c=>[c.id,c]));
+const ORDER = ['Light Source','Optics','Stages & Handling','Infrastructure','Compute & Software','Consumables (chipmaker-paid)'];
+
+/* ---------- sidebar & cost bar (language-aware, re-rendered on switch) ---------- */
+const sb = document.getElementById('sidebar');
+const cb = document.getElementById('costbar');
+function bindNavEl(el){
+  const id = el.dataset.comp;
+  el.addEventListener('mouseenter', ()=>{ if(!pinned){ setActive(id); const r=el.getBoundingClientRect(); positionTip(r.right, r.top+r.height/2);} });
+  el.addEventListener('mouseleave', ()=>{ if(!pinned) clearActive(); });
+  el.addEventListener('click', e=>{ e.stopPropagation(); const r=el.getBoundingClientRect(); pin(id, r.right, r.top+r.height/2); });
+}
+function renderNav(){
+  sb.innerHTML = '';
+  ORDER.forEach(g=>{
+    const items = C.filter(c=>c.group===g);
+    if(!items.length) return;
+    const div = document.createElement('div'); div.className='grp';
+    const sum = items.reduce((a,c)=>a+(P(c)||0),0);
+    div.innerHTML = '<div class="grp-h" data-group="'+g+'"><i style="background:'+GROUPS[g].raw+'"></i>'+GN(g)+(sum?' · '+T('~','约')+sum+'%':'')+'</div>';
+    items.forEach(c=>{
+      const it = document.createElement('div'); it.className='item'; it.dataset.comp=c.id;
+      it.innerHTML = '<span class="dot" style="background:'+GROUPS[c.group].raw+'"></span><span class="nm">'+CF(c,'name')+'</span><span class="pc">'+(P(c)!=null? T('~','约')+P(c)+'%':T('consumable','耗材'))+'</span>';
+      div.appendChild(it); bindNavEl(it);
+    });
+    sb.appendChild(div);
+  });
+  cb.innerHTML = '';
+  ORDER.forEach(g=>{
+    C.filter(c=>c.group===g && c.pct).forEach(c=>{
+      const s = document.createElement('div'); s.className='seg'; s.dataset.comp=c.id;
+      s.style.width = P(c)+'%'; s.style.background = GROUPS[c.group].raw;
+      s.innerHTML = '<span>'+(P(c)>=4 ? P(c)+'%' : '')+'</span>';
+      s.title = CF(c,'name')+' — '+T('~','约')+P(c)+'%';
+      cb.appendChild(s); bindNavEl(s);
+    });
+  });
+  if(activeId){
+    document.querySelectorAll('.item,.seg').forEach(el=>el.classList.toggle('active', el.dataset.comp===activeId));
+  }
+}
+/* update shares in place on price-mode switch so the cost bar animates */
+function refreshShares(){
+  document.querySelectorAll('#sidebar .grp-h').forEach(h=>{
+    const g = h.dataset.group;
+    const sum = C.filter(c=>c.group===g).reduce((a,c)=>a+(P(c)||0),0);
+    h.innerHTML = '<i style="background:'+GROUPS[g].raw+'"></i>'+GN(g)+(sum?' · '+T('~','约')+sum+'%':'');
+  });
+  document.querySelectorAll('#sidebar .item').forEach(it=>{
+    const c = byId[it.dataset.comp];
+    it.querySelector('.pc').textContent = P(c)!=null ? T('~','约')+P(c)+'%' : T('consumable','耗材');
+  });
+  document.querySelectorAll('#costbar .seg').forEach(s=>{
+    const c = byId[s.dataset.comp];
+    s.style.width = P(c)+'%';
+    s.querySelector('span').textContent = P(c)>=4 ? P(c)+'%' : '';
+    s.title = CF(c,'name')+' — '+T('~','约')+P(c)+'%';
+  });
+}
+
+/* ---------- tooltip ---------- */
+const tip = document.getElementById('tip');
+const svg = document.getElementById('machine');
+let activeId = null, pinned = false;
+
+function euro(c){
+  if(c.pct==null) return '';
+  const v = Math.round(P(c)/100*PRICES[priceKey].eur);
+  return lang==='zh'
+    ? '≈ €'+v+'M（整机 €'+PRICES[priceKey].eur+'M · '+priceLabel()+'）'
+    : '≈ €'+v+'M of a €'+PRICES[priceKey].eur+'M '+priceLabel();
+}
+function li(x){
+  return '<li><b>'+x.n+'</b>'+(x.t&&x.t!=='—'?'<span class="tk">'+x.t+'</span>':'')+(x.r?'<span class="role">'+x.r+'</span>':'')+'</li>';
+}
+function buildTip(id){
+  const c = byId[id];
+  document.getElementById('tipGrp').textContent = GN(c.group);
+  document.getElementById('tipGrp').style.color = GROUPS[c.group].raw;
+  document.getElementById('tipName').textContent = CF(c,'name');
+  document.getElementById('tipPct').textContent = P(c)!=null ? (lang==='zh' ? '约占整机成本 '+P(c)+'%' : '~'+P(c)+'% of system cost') : T('Consumable','耗材');
+  document.getElementById('tipRng').textContent = rngText(c) + (P(c)!=null ? ' · '+euro(c) : '');
+  const V=CF(c,'vendors'), M=CF(c,'mats'), MV=CF(c,'matv'), E=CF(c,'equip'), HN=CF(c,'hna'), NT=CF(c,'note');
+  let h = '<div class="tip-desc">'+CF(c,'desc')+'</div>';
+  if(V && V.length) h += '<div class="tip-h">'+T('Component vendors','零部件供应商')+'</div><ul class="vlist">'+V.map(li).join('')+'</ul>';
+  if(M && M.length && M[0]!=='—') h += '<div class="tip-h">'+T('Key materials & inputs','关键材料与投入')+'</div><div class="chips">'+M.map(m=>'<span class="mchip">'+m+'</span>').join('')+'</div>';
+  if(MV && MV.length) h += '<div class="tip-h">'+T('Material suppliers','材料供应商')+'</div><ul class="vlist">'+MV.map(li).join('')+'</ul>';
+  if(E && E.length) h += '<div class="tip-h">'+T('Manufacturing equipment / toolchain','制造设备与工具链')+'</div><ul class="vlist">'+E.map(li).join('')+'</ul>';
+  if(HN) h += '<div class="hna"><b>'+T('High-NA (EXE) delta:','High-NA（EXE）差异：')+'</b> '+HN+'</div>';
+  if(NT) h += '<div class="note"><b>'+T('Investor note:','投资者要点：')+'</b> '+NT+'</div>';
+  document.getElementById('tipBody').innerHTML = h;
+}
+function positionTip(x,y){
+  const w = 400, pad = 14;
+  let left = x + 20;
+  if(left + w + pad > window.innerWidth) left = x - w - 20;
+  if(left < pad) left = pad;
+  tip.style.left = left+'px';
+  const h = Math.min(tip.offsetHeight, window.innerHeight*0.72);
+  let top = y - 40;
+  if(top + h + pad > window.innerHeight) top = window.innerHeight - h - pad;
+  if(top < pad) top = pad;
+  tip.style.top = top+'px';
+}
+function setActive(id){
+  activeId = id;
+  buildTip(id);
+  tip.classList.add('show');
+  svg.classList.add('dim');
+  cb.classList.add('dim');
+  document.querySelectorAll('.comp,[data-comp]').forEach(el=>{
+    el.classList.toggle('active', el.dataset.comp===id);
+  });
+}
+function clearActive(){
+  if(pinned) return;
+  activeId = null;
+  activeProc = null;
+  tip.classList.remove('show');
+  svg.classList.remove('dim');
+  cb.classList.remove('dim');
+  document.querySelectorAll('.active').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('#gfxBox svg.gdim').forEach(s=>s.classList.remove('gdim'));
+}
+function pin(id,x,y){
+  if(pinned && activeId===id){ unpin(); return; }
+  pinned = true;
+  tip.classList.add('pinned');
+  setActive(id);
+  if(x!=null) positionTip(x,y);
+}
+function unpin(){
+  pinned = false;
+  tip.classList.remove('pinned');
+  clearActive();
+}
+
+svg.querySelectorAll('.comp').forEach(g=>{
+  const id = g.dataset.comp;
+  g.addEventListener('mouseenter', e=>{ if(!pinned){ setActive(id); positionTip(e.clientX,e.clientY);} });
+  g.addEventListener('mousemove', e=>{ if(!pinned) positionTip(e.clientX,e.clientY); });
+  g.addEventListener('mouseleave', ()=>{ if(!pinned) clearActive(); });
+  g.addEventListener('click', e=>{ e.stopPropagation(); pin(id,e.clientX,e.clientY); });
+});
+tip.addEventListener('click', e=>e.stopPropagation());
+document.getElementById('tipClose').addEventListener('click', unpin);
+document.addEventListener('click', ()=>{ if(pinned) unpin(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') unpin(); });
+
+/* ================= CHIP-MAKING PROCESS VIEW ================= */
+/* wk = how to read the per-wafer figure */
+const WK = {
+  dep:  ['implied tool depreciation per wafer','每片晶圆的隐含设备折旧'],
+  mat:  ['direct consumable spend per wafer','每片晶圆的直接材料支出'],
+  amort:['amortized per wafer over product volume','按产品晶圆量摊销到每片'],
+  ind:  ['indirect — amortized NRE, licenses & royalties','间接 — 摊销的 NRE、授权与版税'],
+  emb:  ['embedded in the upstream product price','已包含在上游产品价格中']
+};
+
+const STAGES = [
+{ id:'design', n:'Chip Design & EDA', zh:'芯片设计与 EDA', short:'Design', zhShort:'设计', tag:'Pre-fab', zhTag:'制造前',
+  d:'Architecture → RTL → synthesis → place-&-route → physical verification → GDSII tape-out. A 3 nm-class SoC costs $500M+ in design NRE before a single wafer starts; it reaches each wafer as amortized design cost, EDA licenses and IP royalties.',
+  zhD:'架构 → RTL → 综合 → 布局布线 → 物理验证 → GDSII 流片。一颗 3nm 级 SoC 的设计投入（NRE）超过 5 亿美元；它以设计摊销、EDA 授权与 IP 版税的形式进入每片晶圆。',
+  tot:'Indirect: ≈$150–500 / wafer-equivalent in amortized NRE, licenses & royalties (volume-dependent)', zhTot:'间接：摊销 NRE、授权与版税合计约每片 $150–500（取决于产量）',
+  steps:[['Architecture','架构定义'],['RTL coding','RTL 编码'],['Synthesis & P&R','综合与布局布线'],['Signoff verification','签核验证'],['Tape-out (GDSII)','流片（GDSII）']],
+  eq:[
+    {n:'EDA software suites', zh:'EDA 软件套件', w:'$50–200', wk:'ind',
+     d:'Synthesis, place-&-route, simulation, signoff (timing/DRC/LVS) and DFT. A Big-3 oligopoly holds ~75% of the market.',
+     zhD:'综合、布局布线、仿真、签核（时序/DRC/LVS）与 DFT。三巨头寡头垄断约 75% 市场。',
+     v:[{n:'Synopsys', t:'NASDAQ: SNPS'},{n:'Cadence', t:'NASDAQ: CDNS'},{n:'Siemens EDA', t:'ETR: SIE'}]},
+    {n:'Semiconductor IP cores', zh:'半导体 IP 核', w:'$80–250', wk:'ind',
+     d:'CPU/GPU cores, SerDes, memory PHY and foundation IP licensed into designs; royalties scale with chip ASP.',
+     zhD:'授权进设计的 CPU/GPU 核、SerDes、存储 PHY 与基础 IP；版税随芯片售价浮动。',
+     v:[{n:'Arm', t:'NASDAQ: ARM'},{n:'Synopsys', t:'NASDAQ: SNPS'},{n:'Cadence', t:'NASDAQ: CDNS'},{n:'Alphawave Semi', t:'LSE: AWE'}]},
+    {n:'Design-compute (GPU/cloud farms)', zh:'设计算力（GPU/云）', w:'$10–40', wk:'ind',
+     d:'Verification, simulation and AI-assisted layout increasingly run on GPU clusters and hyperscaler cloud.',
+     zhD:'验证、仿真与 AI 辅助布线日益依赖 GPU 集群与超大规模云。',
+     v:[{n:'NVIDIA', t:'NASDAQ: NVDA'},{n:'AWS / Azure / Google Cloud', t:'AMZN · MSFT · GOOGL'}]}
+  ],
+  mat:[],
+  note:'EDA + IP is the highest-margin toll-booth in the chain — paid up-front and again per unit shipped.',
+  zhNote:'EDA + IP 是产业链中毛利最高的"收费站"——流片前收一次，量产后按件再收。'
+},
+{ id:'mask', n:'Photomask Manufacturing', zh:'光掩模制造', short:'Mask', zhShort:'掩模', tag:'Pre-fab', zhTag:'制造前',
+  d:'A 3 nm design needs 60–80+ photomasks. Blanks are patterned by multi-beam e-beam writers, inspected (actinic at 13.5 nm for EUV), repaired and pelliclized. A leading-edge mask set runs ≈$25–40M, amortized over the product’s wafer volume.',
+  zhD:'一套 3nm 设计需要 60–80 张以上光罩。掩模基板由多束电子束光刻机写制图形，经检测（EUV 用 13.5nm 同波长光化检测）、修复并贴保护膜。先进掩模组约 $2,500–4,000 万，按产品晶圆量摊销。',
+  tot:'Reaches wafers as ≈$100–300 / wafer mask amortization (volume-dependent); items below are embedded in the mask-set price', zhTot:'以约每片 $100–300 的掩模摊销进入晶圆成本（取决于产量）；下列项目已含于掩模组价格',
+  steps:[['Blank preparation','基板制备'],['Multi-beam e-beam write','多束电子束写制'],['Develop & etch','显影与刻蚀'],['Inspection & repair','检测与修复'],['Pellicle mounting','贴保护膜']],
+  eq:[
+    {n:'Multi-beam mask writers', zh:'多束掩模光刻机', w:'$10–40', wk:'amort',
+     d:'Write 10¹¹+ pixels per mask layer. A duopoly: IMS (Intel-majority) and NuFlare.',
+     zhD:'每层掩模写入超过 10¹¹ 个像素。双寡头：IMS（英特尔控股）与 NuFlare。',
+     v:[{n:'IMS Nanofabrication', t:'Intel (NASDAQ: INTC) majority'},{n:'NuFlare', t:'Toshiba group', zhT:'东芝集团'},{n:'JEOL', t:'TYO: 6951'}]},
+    {n:'Mask inspection (actinic / e-beam)', zh:'掩模检测（光化/电子束）', w:'$10–40', wk:'amort',
+     d:'Lasertec’s ACTIS is the near-monopoly at-wavelength (13.5 nm) EUV pattern/blank inspection franchise.',
+     zhD:'Lasertec 的 ACTIS 在 13.5nm 同波长 EUV 检测领域近乎垄断。',
+     v:[{n:'Lasertec', t:'TYO: 6920'},{n:'KLA', t:'NASDAQ: KLAC'},{n:'NuFlare', t:'Toshiba group', zhT:'东芝集团'}]},
+    {n:'Mask repair & CD metrology', zh:'掩模修复与线宽量测', w:'$5–15', wk:'amort',
+     d:'Femtosecond/e-beam repair of individual defects; CD-SEM metrology of written patterns.',
+     zhD:'对单个缺陷做飞秒/电子束修复；对写制图形做 CD-SEM 量测。',
+     v:[{n:'ZEISS SMT', t:'Private', zhT:'非上市'},{n:'Hitachi High-Tech', t:'Hitachi (TYO: 6501)', zhT:'日立（TYO: 6501）旗下'}]}
+  ],
+  mat:[
+    {n:'EUV / DUV mask blanks', zh:'EUV/DUV 掩模基板', w:'$20–60', wk:'emb',
+     d:'EUV blanks (LTEM glass + Mo/Si multilayer + absorber) are a Hoya/AGC duopoly; a defect-free EUV blank costs ~$30–100k.',
+     zhD:'EUV 基板（低膨胀玻璃 + Mo/Si 多层膜 + 吸收层）为豪雅/AGC 双寡头；一片无缺陷 EUV 基板约 $3–10 万。',
+     v:[{n:'Hoya', t:'TYO: 7741'},{n:'AGC', t:'TYO: 5201'},{n:'Shin-Etsu (DUV)', t:'TYO: 4063'}]},
+    {n:'Pellicles', zh:'掩模保护膜', w:'$5–20', wk:'emb',
+     d:'Particle shields stretched over the mask; EUV pellicles trade transmission for protection.',
+     zhD:'罩在掩模上的防颗粒薄膜；EUV 保护膜在透过率与保护之间权衡。',
+     v:[{n:'Mitsui Chemicals', t:'TYO: 4183', r:'EUV, ASML-licensed', zhR:'EUV，ASML 授权'},{n:'Canatu', t:'HEL: CANATU', r:'CNT membranes', zhR:'碳纳米管膜'},{n:'Shin-Etsu (DUV)', t:'TYO: 4063'}]},
+    {n:'LTEM substrate glass', zh:'低热膨胀基板玻璃', w:'$3–10', wk:'emb',
+     d:'Zero-expansion glass so the mask does not distort under exposure heat.',
+     zhD:'零膨胀玻璃，避免掩模在曝光热负载下变形。',
+     v:[{n:'Corning (ULE®)', t:'NYSE: GLW'},{n:'SCHOTT', t:'Private', zhT:'非上市'}]},
+    {n:'Reticle pods (carriers)', zh:'掩模传送盒', w:'$2–8', wk:'emb',
+     d:'Dual-pod vacuum carriers keeping EUV masks particle-free in transport and storage.',
+     zhD:'双层真空传送盒，确保 EUV 掩模在运输与存储中无颗粒污染。',
+     v:[{n:'Entegris', t:'NASDAQ: ENTG'},{n:'Gudeng Precision', t:'TWSE: 3680'}]}
+  ]
+},
+{ id:'substrate', n:'Silicon Wafer Manufacturing', zh:'硅片（衬底）制造', short:'Wafer', zhShort:'硅片', tag:'Substrate', zhTag:'衬底',
+  d:'11N-pure polysilicon is pulled into 300 mm Czochralski monocrystal ingots, wire-sawn into slices, ground, etched and polished to sub-nm flatness, then (for leading-edge logic) finished with an epitaxial layer. Sold to fabs at ≈$120–250 per prime epi wafer.',
+  zhD:'11N 纯度多晶硅经直拉法（CZ）拉成 300mm 单晶锭，线锯切片、研磨、腐蚀并抛光至亚纳米平整度，先进逻辑再加外延层。以约每片 $120–250 的价格卖给晶圆厂。',
+  tot:'Direct: wafer ≈$120–250 / wafer; upstream inputs below are embedded in the wafer price', zhTot:'直接：硅片约每片 $120–250；下列上游投入已含于硅片价格',
+  steps:[['Poly-Si refining','多晶硅提纯'],['CZ crystal pulling','直拉单晶'],['Wire-saw slicing','线锯切片'],['Lapping & etch','研磨与腐蚀'],['Polishing','抛光'],['Epitaxy','外延']],
+  eq:[
+    {n:'CZ crystal pullers', zh:'直拉单晶炉', w:'$5–15', wk:'emb',
+     d:'Rotate a seed out of 1,420 °C molten silicon over ~1 week per ingot; majors also build their own.',
+     zhD:'在 1,420°C 硅熔体中旋转提拉晶种，单锭约一周；龙头厂亦自制设备。',
+     v:[{n:'PVA TePla', t:'ETR: TPE'},{n:'Ferrotec', t:'TYO: 6890'},{n:'S-TECH', t:'Private (KR)', zhT:'非上市（韩国）'}]},
+    {n:'Wire saws & grinders', zh:'线锯与磨床', w:'$3–10', wk:'emb',
+     d:'Diamond-wire saws slice ingots into ~775 µm wafers; edge/surface grinders follow.',
+     zhD:'金刚石线锯将晶锭切成约 775µm 厚的晶圆，随后进行边缘与表面磨削。',
+     v:[{n:'Komatsu NTC', t:'Komatsu (TYO: 6301)', zhT:'小松（TYO: 6301）旗下'},{n:'Accretech', t:'TYO: 7729'},{n:'Okamoto', t:'TYO: 6125'},{n:'Disco', t:'TYO: 6146'}]},
+    {n:'Polishers & epi reactors', zh:'抛光机与外延炉', w:'$8–20', wk:'emb',
+     d:'Double-side polish to sub-nm flatness; epitaxial silicon reactors deposit the defect-free device layer.',
+     zhD:'双面抛光至亚纳米平整度；外延炉沉积无缺陷器件层。',
+     v:[{n:'Applied Materials (epi)', t:'NASDAQ: AMAT'},{n:'ASM International', t:'AMS: ASM'}]},
+    {n:'Wafer inspection & sorting', zh:'硅片检测与分选', w:'$2–8', wk:'emb',
+     d:'Surfscan-class particle/defect scanners and flatness metrology qualify every wafer.',
+     zhD:'Surfscan 级颗粒/缺陷扫描与平整度量测对每片硅片做出厂验证。',
+     v:[{n:'KLA', t:'NASDAQ: KLAC'},{n:'Onto Innovation', t:'NYSE: ONTO'}]}
+  ],
+  mat:[
+    {n:'Prime epi wafer (the product)', zh:'抛光外延硅片（本阶段产品）', w:'$120–250', wk:'mat',
+     d:'The top-5 control ~95% of 300 mm supply — one of the most consolidated layers of the whole chain.',
+     zhD:'前五大厂商控制约 95% 的 300mm 产能——全产业链集中度最高的环节之一。',
+     v:[{n:'Shin-Etsu Chemical', t:'TYO: 4063', r:'~30% leader', zhR:'约 30% 份额居首'},{n:'SUMCO', t:'TYO: 3436'},{n:'GlobalWafers', t:'TPEx: 6488'},{n:'Siltronic', t:'ETR: WAF'},{n:'SK Siltron', t:'SK Inc. (KRX: 034730)', zhT:'SK（KRX: 034730）旗下'}]},
+    {n:'Electronic-grade polysilicon (11N)', zh:'电子级多晶硅（11N）', w:'$10–25', wk:'emb',
+     d:'Siemens-process hyper-pure silicon; semiconductor grade is a small, premium slice of the poly market.',
+     zhD:'西门子法超高纯硅；半导体级是多晶硅市场中量小价高的部分。',
+     v:[{n:'Hemlock', t:'Corning-controlled (NYSE: GLW)', zhT:'康宁（NYSE: GLW）控股'},{n:'Wacker', t:'ETR: WCH'},{n:'Tokuyama', t:'TYO: 4043'},{n:'OCI', t:'KRX: 010060'},{n:'Mitsubishi Materials', t:'TYO: 5711'}]},
+    {n:'Quartz crucibles & high-purity sand', zh:'石英坩埚与高纯石英砂', w:'$4–10', wk:'emb',
+     d:'Single-use crucibles per pull; ultra-pure quartz sand comes almost entirely from Spruce Pine, North Carolina.',
+     zhD:'每次拉晶消耗一只坩埚；超高纯石英砂几乎全部产自美国北卡州 Spruce Pine。',
+     v:[{n:'Shin-Etsu Quartz', t:'Shin-Etsu group', zhT:'信越集团'},{n:'Ferrotec', t:'TYO: 6890'},{n:'Sibelco / The Quartz Corp', t:'Private', zhT:'非上市'}]},
+    {n:'Diamond wire & abrasives', zh:'金刚石线与磨料', w:'$2–6', wk:'emb',
+     d:'Consumed in slicing and grinding steps.',
+     zhD:'切片与磨削工序中的耗材。',
+     v:[{n:'Asahi Diamond', t:'TYO: 6140'},{n:'Noritake', t:'TYO: 5331'}]}
+  ]
+},
+{ id:'thermal', n:'Oxidation & Thermal Processing', zh:'氧化与热制程', short:'Thermal', zhShort:'热制程', tag:'Front-end (FEOL)', zhTag:'前道工艺',
+  d:'Batch furnaces and single-wafer RTP grow gate/field oxides, drive in dopants, anneal implant damage and densify films at 400–1,100 °C. Dozens of thermal steps per flow; thermal-budget control is critical at gate-all-around nodes.',
+  zhD:'立式炉与单片快速热处理（RTP）在 400–1,100°C 下生长栅极/场氧化层、推进掺杂、修复注入损伤并致密化薄膜。整个流程含数十道热工序；GAA 节点对热预算的控制极为苛刻。',
+  tot:'Tools ≈$130–250 · materials ≈$45–100 per wafer (est.)', zhTot:'设备约 $130–250 · 材料约 $45–100 / 片（估算）',
+  steps:[['Pre-clean','前清洗'],['Oxidation','氧化'],['LPCVD furnace films','炉管薄膜'],['Anneal & activation','退火与激活'],['Film metrology','膜厚量测']],
+  eq:[
+    {n:'Vertical batch furnaces', zh:'立式炉管', w:'$80–150', wk:'dep',
+     d:'100+ wafers per run for oxidation, LPCVD nitride/poly and anneals.',
+     zhD:'单炉百片以上，用于氧化、LPCVD 氮化硅/多晶硅与退火。',
+     v:[{n:'Tokyo Electron', t:'TYO: 8035'},{n:'Kokusai Electric', t:'TYO: 6525', r:'batch leader', zhR:'批量炉龙头'},{n:'ASM International', t:'AMS: ASM'}]},
+    {n:'RTP & millisecond anneal', zh:'快速热处理与毫秒退火', w:'$50–100', wk:'dep',
+     d:'Lamp/laser systems spike wafers to ~1,000 °C+ in milliseconds to activate dopants without diffusing them.',
+     zhD:'灯组/激光在毫秒级把晶圆冲到 1,000°C 以上，在不扩散的前提下激活掺杂。',
+     v:[{n:'Applied Materials', t:'NASDAQ: AMAT', r:'leader', zhR:'龙头'},{n:'Screen (laser anneal)', t:'TYO: 7735'},{n:'Veeco', t:'NASDAQ: VECO'},{n:'Mattson', t:'Private (CN-owned)', zhT:'非上市（中资）'}]}
+  ],
+  mat:[
+    {n:'Bulk & process gases (O₂/H₂/N₂/Ar)', zh:'大宗与工艺气体（O₂/H₂/N₂/Ar）', w:'$25–50', wk:'mat',
+     d:'Pipeline-supplied bulk gases; the industrial-gas majors run on-site plants at every fab.',
+     zhD:'管道供应的大宗气体；工业气体巨头在各晶圆厂运营现场制气装置。',
+     v:[{n:'Linde', t:'NASDAQ: LIN'},{n:'Air Liquide', t:'EPA: AI'},{n:'Air Products', t:'NYSE: APD'},{n:'Nippon Sanso', t:'TYO: 4091'}]},
+    {n:'Quartzware (tubes, boats)', zh:'石英件（炉管、晶舟）', w:'$10–25', wk:'mat',
+     d:'High-purity fused quartz consumed by devitrification and etch cycles.',
+     zhD:'高纯熔融石英件，因析晶与清洗周期而持续消耗。',
+     v:[{n:'Tosoh', t:'TYO: 4042'},{n:'Shin-Etsu Quartz', t:'Shin-Etsu group', zhT:'信越集团'},{n:'Ferrotec', t:'TYO: 6890'}]},
+    {n:'SiC furnace components', zh:'碳化硅炉用部件', w:'$10–25', wk:'mat',
+     d:'SiC boats/tubes replace quartz at the highest temperatures for purity and lifetime.',
+     zhD:'最高温段用 SiC 晶舟/炉管替代石英，纯度与寿命更优。',
+     v:[{n:'Tokai Carbon', t:'TYO: 5301'},{n:'CoorsTek', t:'Private', zhT:'非上市'},{n:'Ferrotec', t:'TYO: 6890'}]}
+  ]
+},
+{ id:'litho', n:'Photolithography', zh:'光刻', short:'Litho', zhShort:'光刻', tag:'Front-end (FEOL)', zhTag:'前道工艺',
+  d:'Resist coat → exposure → post-exposure bake → develop, repeated for ~80–100 mask layers (the finest ~20–25 on EUV, the rest on ArF-immersion/KrF). The single most capital-intensive stage: one EUV pass costs ≈$25–40 of scanner time per wafer.',
+  zhD:'涂胶 → 曝光 → 曝后烘 → 显影，重复约 80–100 个掩模层（最精细的约 20–25 层用 EUV，其余用 ArF 浸没/KrF）。整线资本开支最大的环节：单次 EUV 曝光约消耗 $25–40 的光刻机机时。',
+  tot:'Tools ≈$1,050–1,650 · materials ≈$260–580 per wafer (est.) — the largest single block', zhTot:'设备约 $1,050–1,650 · 材料约 $260–580 / 片（估算）——单一环节占比最大',
+  steps:[['Spin-coat (track)','涂胶（轨道机）'],['EUV / DUV exposure','EUV/DUV 曝光'],['Post-exposure bake','曝后烘'],['Develop','显影'],['CD & overlay check','线宽与套刻量测']],
+  eq:[
+    {n:'EUV scanners', zh:'EUV 光刻机', w:'$500–800', wk:'dep',
+     d:'The €220–400M tools that print the finest layers. ASML is the only maker on earth.',
+     zhD:'印制最精细层的 €2.2–4 亿设备。ASML 是全球唯一制造商。',
+     v:[{n:'ASML', t:'NASDAQ/AMS: ASML', r:'monopoly', zhR:'垄断'}],
+     note:'Open the “EUV Machine Explorer” tab for the full component-by-component teardown of this one tool.',
+     zhNote:'切换到“EUV 光刻机整机解析”标签页，可查看这台设备逐个零部件的完整拆解。'},
+    {n:'DUV scanners (ArF-i / KrF / i-line)', zh:'DUV 光刻机（ArF 浸没/KrF/i-line）', w:'$400–600', wk:'dep',
+     d:'Immersion ArF still prints most layers; Nikon/Canon persist in mature segments, Canon also pushes nanoimprint.',
+     zhD:'ArF 浸没机仍承担多数层；尼康/佳能坚守成熟段，佳能另押注纳米压印。',
+     v:[{n:'ASML', t:'NASDAQ/AMS: ASML', r:'~90% value share', zhR:'约 90% 金额份额'},{n:'Nikon', t:'TYO: 7731'},{n:'Canon', t:'TYO: 7751'}]},
+    {n:'Coater / developer track', zh:'涂胶显影机（Track）', w:'$150–250', wk:'dep',
+     d:'Docked inline with every scanner; TEL holds ~90% overall and 100% of EUV-qualified tracks.',
+     zhD:'与每台光刻机在线对接；东京电子整体约 90% 份额，EUV 认证轨道机 100%。',
+     v:[{n:'Tokyo Electron', t:'TYO: 8035'},{n:'Screen', t:'TYO: 7735'}]}
+  ],
+  mat:[
+    {n:'Photoresists (EUV/ArF/KrF)', zh:'光刻胶（EUV/ArF/KrF）', w:'$120–200', wk:'mat',
+     d:'Japan controls ~90% of leading-edge resist. EUV metal-oxide resist (Inpria/JSR) and Lam’s dry resist are the frontier.',
+     zhD:'日本掌控约 90% 先进光刻胶。EUV 金属氧化物胶（Inpria/JSR）与 Lam 干式胶是前沿方向。',
+     v:[{n:'JSR (incl. Inpria)', t:'JIC, private', zhT:'JIC 私有化'},{n:'TOK', t:'TYO: 4186'},{n:'Shin-Etsu', t:'TYO: 4063'},{n:'Sumitomo Chemical', t:'TYO: 4005'},{n:'FujiFilm', t:'TYO: 4901'},{n:'Lam (dry resist)', t:'NASDAQ: LRCX'}]},
+    {n:'Litho ancillaries (BARC, developer, EBR)', zh:'光刻配套化学品（抗反射层、显影液、边胶清除）', w:'$40–80', wk:'mat',
+     d:'Anti-reflective coatings, TMAH developer, edge-bead remover, rinse — the quiet consumable annuity around every exposure.',
+     zhD:'抗反射涂层、TMAH 显影液、边胶清除液与漂洗液——每次曝光背后安静的耗材年金。',
+     v:[{n:'Merck KGaA', t:'ETR: MRK'},{n:'Brewer Science', t:'Private', zhT:'非上市'},{n:'Tokuyama', t:'TYO: 4043'},{n:'FujiFilm', t:'TYO: 4901'}]},
+    {n:'Photomask amortization', zh:'光掩模摊销', w:'$100–300', wk:'amort',
+     d:'The $25–40M mask set amortized per wafer; mostly made captive at TSMC/Samsung/Intel, merchant by DNP/Toppan. See the Photomask stage.',
+     zhD:'$2,500–4,000 万掩模组按片摊销；多为台积电/三星/英特尔自制，商业掩模来自 DNP/凸版。详见光掩模阶段。',
+     v:[{n:'Captive mask shops', t:'TSM · 005930.KS · INTC', zhT:'台积电/三星/英特尔自制'},{n:'DNP', t:'TYO: 7912'},{n:'Toppan', t:'TYO: 7911'}]}
+  ]
+},
+{ id:'etch', n:'Etch & Strip', zh:'刻蚀与去胶', short:'Etch', zhShort:'刻蚀', tag:'Front-end (FEOL)', zhTag:'前道工艺',
+  d:'Plasma (RIE / atomic-layer etch) transfers resist patterns into the films below: conductor, dielectric and high-aspect-ratio etches. Gate-all-around nanosheets demand atomic-precision selective etch. Together with deposition, the biggest tool fleet in the fab.',
+  zhD:'等离子体（RIE/原子层刻蚀）把光刻胶图形转移到下方薄膜：导体刻蚀、介质刻蚀与高深宽比刻蚀。GAA 纳米片要求原子级精度的选择性刻蚀。与薄膜沉积并列为厂内最大设备群。',
+  tot:'Tools ≈$930–1,360 · materials ≈$135–270 per wafer (est.)', zhTot:'设备约 $930–1,360 · 材料约 $135–270 / 片（估算）',
+  steps:[['Hard-mask open','硬掩模开口'],['Main etch','主刻蚀'],['Over-etch / ALE','过刻 / 原子层刻蚀'],['Resist strip','去胶'],['Post-etch clean','刻蚀后清洗']],
+  eq:[
+    {n:'Conductor / silicon etch', zh:'导体/硅刻蚀机', w:'$500–700', wk:'dep',
+     d:'Gate, fin/nanosheet and metal etches; Lam leads, with TEL and AMAT close in specific applications.',
+     zhD:'栅极、鳍/纳米片与金属刻蚀；Lam 居首，东京电子与应材在特定应用紧随。',
+     v:[{n:'Lam Research', t:'NASDAQ: LRCX', r:'leader', zhR:'龙头'},{n:'Tokyo Electron', t:'TYO: 8035'},{n:'Applied Materials', t:'NASDAQ: AMAT'},{n:'Hitachi High-Tech', t:'Hitachi (TYO: 6501)', zhT:'日立（TYO: 6501）旗下'},{n:'SEMES', t:'Samsung subsidiary', zhT:'三星子公司'}]},
+    {n:'Dielectric / high-AR etch', zh:'介质/高深宽比刻蚀机', w:'$400–600', wk:'dep',
+     d:'Contact/via and deep-stack etches; TEL and Lam dominate dielectric.',
+     zhD:'接触孔/通孔与深堆叠刻蚀；介质刻蚀由东京电子与 Lam 主导。',
+     v:[{n:'Tokyo Electron', t:'TYO: 8035'},{n:'Lam Research', t:'NASDAQ: LRCX'},{n:'Applied Materials', t:'NASDAQ: AMAT'}]},
+    {n:'Resist strip / ash', zh:'去胶机', w:'$30–60', wk:'dep',
+     d:'Plasma ashing removes spent resist after every etch.',
+     zhD:'每次刻蚀后用等离子体灰化去除残余光刻胶。',
+     v:[{n:'PSK', t:'KOSDAQ: 319660', r:'strip leader', zhR:'去胶龙头'},{n:'Hitachi High-Tech', t:'Hitachi (TYO: 6501)', zhT:'日立旗下'},{n:'Mattson', t:'Private (CN-owned)', zhT:'非上市（中资）'}]}
+  ],
+  mat:[
+    {n:'Fluorocarbon & specialty etch gases', zh:'氟碳与特种刻蚀气体', w:'$60–120', wk:'mat',
+     d:'CF₄, C₄F₆, C₄F₈, CHF₃, NF₃, SF₆ — selectivity engineering in a bottle.',
+     zhD:'CF₄、C₄F₆、C₄F₈、CHF₃、NF₃、SF₆——瓶装的选择比工程。',
+     v:[{n:'Resonac', t:'TYO: 4004'},{n:'SK Materials', t:'SK Inc. (KRX: 034730)', zhT:'SK（KRX: 034730）旗下'},{n:'Kanto Denka', t:'TYO: 4047'},{n:'Linde', t:'NASDAQ: LIN'},{n:'Merck KGaA', t:'ETR: MRK'}]},
+    {n:'Halogen gases (Cl₂ / HBr)', zh:'卤素气体（Cl₂/HBr）', w:'$15–30', wk:'mat',
+     d:'Silicon and metal etch chemistries.',
+     zhD:'硅与金属刻蚀所用化学气体。',
+     v:[{n:'Resonac', t:'TYO: 4004'},{n:'Air Liquide', t:'EPA: AI'},{n:'Nippon Sanso', t:'TYO: 4091'}]},
+    {n:'Chamber consumables (Si/SiC rings, showerheads)', zh:'腔体耗材（硅/碳化硅环、喷淋头）', w:'$60–120', wk:'mat',
+     d:'Plasma erodes the chamber itself — edge rings and liners are a hidden consumable annuity tied to plasma hours.',
+     zhD:'等离子体会侵蚀腔体本身——边缘环与内衬是与等离子时长挂钩的隐性耗材年金。',
+     v:[{n:'Tokai Carbon', t:'TYO: 5301'},{n:'Hana Materials', t:'KOSDAQ: 166090'},{n:'CoorsTek', t:'Private', zhT:'非上市'},{n:'Ferrotec', t:'TYO: 6890'}]}
+  ]
+},
+{ id:'clean', n:'Wet Clean & Surface Prep', zh:'湿法清洗与表面处理', short:'Clean', zhShort:'清洗', tag:'Front-end (FEOL)', zhTag:'前道工艺',
+  d:'200+ cleaning and surface-prep steps per flow: RCA chemistries, dilute HF, ozone and single-wafer spin processors. Particles and metallic contamination at parts-per-trillion levels decide yield.',
+  zhD:'整个流程含 200 道以上清洗与表面处理：RCA 化学体系、稀 HF、臭氧与单片旋转清洗。ppt 级的颗粒与金属污染直接决定良率。',
+  tot:'Tools ≈$250–400 · materials ≈$90–180 per wafer (est.)', zhTot:'设备约 $250–400 · 材料约 $90–180 / 片（估算）',
+  steps:[['Chemical clean','化学清洗'],['UPW rinse','超纯水冲洗'],['Dry','干燥'],['Defect scan','缺陷扫描']],
+  eq:[
+    {n:'Single-wafer spin cleaners', zh:'单片旋转清洗机', w:'$220–350', wk:'dep',
+     d:'Screen is the global leader; ACM Research is the fast-growing challenger out of China.',
+     zhD:'迪恩士（Screen）全球居首；盛美（ACM）是来自中国的快速挑战者。',
+     v:[{n:'Screen', t:'TYO: 7735', r:'leader', zhR:'龙头'},{n:'Tokyo Electron', t:'TYO: 8035'},{n:'SEMES', t:'Samsung subsidiary', zhT:'三星子公司'},{n:'ACM Research', t:'NASDAQ: ACMR'}]},
+    {n:'Batch wet benches', zh:'槽式清洗机', w:'$30–50', wk:'dep',
+     d:'Multi-wafer immersion baths for less critical cleans.',
+     zhD:'用于次关键清洗的多片浸泡槽。',
+     v:[{n:'Screen', t:'TYO: 7735'},{n:'Tokyo Electron', t:'TYO: 8035'}]}
+  ],
+  mat:[
+    {n:'Ultrapure wet chemicals (H₂SO₄, H₂O₂, HF, IPA)', zh:'超纯湿化学品（硫酸、双氧水、HF、IPA）', w:'$60–120', wk:'mat',
+     d:'Grades at ppt metal levels; ultra-pure HF is a Stella Chemifa specialty.',
+     zhD:'金属杂质 ppt 级；超纯 HF 是 Stella Chemifa 的看家产品。',
+     v:[{n:'Stella Chemifa', t:'TYO: 4109'},{n:'Mitsubishi Chemical', t:'TYO: 4188'},{n:'BASF', t:'ETR: BAS'},{n:'Kanto Chemical', t:'Private', zhT:'非上市'},{n:'FujiFilm', t:'TYO: 4901'}]},
+    {n:'Filters & purifiers', zh:'过滤器与纯化器', w:'$20–40', wk:'mat',
+     d:'Point-of-use liquid/gas filtration; replaced on schedule across thousands of points per fab.',
+     zhD:'使用点液体/气体过滤；每座厂数千个点位按周期更换。',
+     v:[{n:'Entegris', t:'NASDAQ: ENTG'},{n:'Pall', t:'Danaher (NYSE: DHR)', zhT:'丹纳赫（NYSE: DHR）旗下'}]},
+    {n:'Ultrapure water (UPW) operations', zh:'超纯水（UPW）运营', w:'$10–20', wk:'mat',
+     d:'A leading-edge fab consumes tens of thousands of tons of 18.2 MΩ water daily.',
+     zhD:'一座先进晶圆厂每天消耗数万吨 18.2 MΩ 超纯水。',
+     v:[{n:'Organo', t:'TYO: 6368'},{n:'Kurita', t:'TYO: 6370'}]}
+  ]
+},
+{ id:'implant', n:'Ion Implantation', zh:'离子注入', short:'Implant', zhShort:'注入', tag:'Front-end (FEOL)', zhTag:'前道工艺',
+  d:'Dopant ions (B, P, As, Ge) are accelerated to keV–MeV energies and shot into the silicon to set junctions and threshold voltages, across high-current, medium-current and high-energy fleets. Activation anneal follows (see Thermal).',
+  zhD:'掺杂离子（硼、磷、砷、锗）被加速到 keV–MeV 级能量注入硅中，定义结深与阈值电压；分大束流、中束流与高能机群。注入后需激活退火（见热制程）。',
+  tot:'Tools ≈$150–250 · materials ≈$15–35 per wafer (est.)', zhTot:'设备约 $150–250 · 材料约 $15–35 / 片（估算）',
+  steps:[['Ionization','离子化'],['Mass analysis','质量分析'],['Acceleration','加速'],['Implant','注入'],['Activation anneal → Thermal','激活退火 → 热制程']],
+  eq:[
+    {n:'Ion implanters', zh:'离子注入机', w:'$150–250', wk:'dep',
+     d:'AMAT (Varian) holds ~70%+; Axcelis is the merchant alternative, strong in high-energy and SiC.',
+     zhD:'应材（Varian）份额约 70%+；Axcelis 是主要替代选项，高能与 SiC 领域见长。',
+     v:[{n:'Applied Materials (Varian)', t:'NASDAQ: AMAT', r:'~70%+ share', zhR:'约 70%+ 份额'},{n:'Axcelis', t:'NASDAQ: ACLS'},{n:'Nissin Ion', t:'Nissin Electric (TYO: 6641)', zhT:'日新电机（TYO: 6641）旗下'}]}
+  ],
+  mat:[
+    {n:'Dopant gases in safe-delivery cylinders', zh:'安全输送钢瓶装掺杂气体', w:'$15–35', wk:'mat',
+     d:'BF₃, PH₃, AsH₃, GeF₄ stored sub-atmospheric in Entegris SDS cylinders for safety.',
+     zhD:'BF₃、PH₃、AsH₃、GeF₄ 以负压形式储存于 Entegris SDS 安全钢瓶。',
+     v:[{n:'Entegris (SDS)', t:'NASDAQ: ENTG'},{n:'Linde', t:'NASDAQ: LIN'},{n:'Resonac', t:'TYO: 4004'},{n:'Nippon Sanso', t:'TYO: 4091'}]}
+  ]
+},
+{ id:'depo', n:'Thin-Film Deposition (CVD / ALD / PVD / Epi)', zh:'薄膜沉积（CVD/ALD/PVD/外延）', short:'Deposition', zhShort:'薄膜', tag:'Front-end & interconnect', zhTag:'前道与互连',
+  d:'Hundreds of film steps: PECVD and flowable dielectrics, ALD for high-k gates, liners and multi-patterning spacers, SiGe source/drain epitaxy, PVD metals and W/Co fill. ALD intensity explodes at gate-all-around nodes.',
+  zhD:'数百道薄膜工序：PECVD 与流动式介质、用于高 k 栅极/衬垫/多重曝光侧墙的 ALD、SiGe 源漏外延、PVD 金属与钨/钴填充。GAA 节点的 ALD 用量爆发式增长。',
+  tot:'Tools ≈$850–1,330 · materials ≈$185–360 per wafer (est.)', zhTot:'设备约 $850–1,330 · 材料约 $185–360 / 片（估算）',
+  steps:[['ALD','原子层沉积'],['CVD / PECVD','化学气相沉积'],['Epitaxy (SiGe)','外延（SiGe）'],['PVD metals','物理气相沉积'],['W / Co fill','钨/钴填充']],
+  eq:[
+    {n:'CVD / PECVD systems', zh:'CVD/PECVD 设备', w:'$350–500', wk:'dep',
+     d:'Dielectric workhorses: oxide, nitride, low-k, gap-fill.',
+     zhD:'介质层主力机型：氧化物、氮化物、低 k 与填隙。',
+     v:[{n:'Applied Materials', t:'NASDAQ: AMAT'},{n:'Lam Research', t:'NASDAQ: LRCX'},{n:'Tokyo Electron', t:'TYO: 8035'}]},
+    {n:'ALD systems', zh:'ALD 设备', w:'$250–400', wk:'dep',
+     d:'One atomic layer at a time — high-k gate stacks, liners, spacers. ASM International is the franchise leader (~55%).',
+     zhD:'逐原子层沉积——高 k 栅叠层、衬垫与侧墙。ASM International 居首（约 55%）。',
+     v:[{n:'ASM International', t:'AMS: ASM', r:'~55% leader', zhR:'约 55% 份额居首'},{n:'Tokyo Electron', t:'TYO: 8035'},{n:'Kokusai Electric', t:'TYO: 6525'},{n:'Lam Research', t:'NASDAQ: LRCX'}]},
+    {n:'Epitaxy (SiGe source/drain)', zh:'外延（SiGe 源漏）', w:'$100–180', wk:'dep',
+     d:'Selective epi grows strained SiGe in source/drain recesses; AMAT Centura dominates.',
+     zhD:'选择性外延在源漏凹槽中生长应变 SiGe；应材 Centura 占主导。',
+     v:[{n:'Applied Materials', t:'NASDAQ: AMAT', r:'dominant', zhR:'主导'},{n:'ASM International', t:'AMS: ASM'}]},
+    {n:'PVD & metal fill', zh:'PVD 与金属填充', w:'$150–250', wk:'dep',
+     d:'AMAT’s Endura platform holds ~85% of PVD; Lam Altus leads tungsten CVD fill.',
+     zhD:'应材 Endura 平台占 PVD 约 85%；Lam Altus 主导钨 CVD 填充。',
+     v:[{n:'Applied Materials (Endura)', t:'NASDAQ: AMAT', r:'~85% PVD', zhR:'PVD 约 85%'},{n:'Lam Research (Altus W)', t:'NASDAQ: LRCX'},{n:'Ulvac', t:'TYO: 6728'},{n:'Canon Anelva', t:'Canon (TYO: 7751)', zhT:'佳能（TYO: 7751）旗下'}]}
+  ],
+  mat:[
+    {n:'ALD/CVD precursors', zh:'ALD/CVD 前驱体', w:'$100–180', wk:'mat',
+     d:'TEOS, HCDS, WF₆, Hf/Zr and metal-organic compounds — the fastest-growing wafer-materials category.',
+     zhD:'TEOS、HCDS、WF₆、铪/锆及金属有机化合物——增速最快的晶圆材料品类。',
+     v:[{n:'Merck KGaA (EMD)', t:'ETR: MRK'},{n:'Entegris', t:'NASDAQ: ENTG'},{n:'Adeka', t:'TYO: 4401'},{n:'Soulbrain', t:'KOSDAQ: 357780'},{n:'DNF', t:'KOSDAQ: 092070'},{n:'Air Liquide', t:'EPA: AI'}]},
+    {n:'Deposition gases (SiH₄, NH₃, N₂O, DCS)', zh:'沉积气体（硅烷、氨气、氧化亚氮、二氯硅烷）', w:'$60–120', wk:'mat',
+     d:'Silicon-source and reactant gases consumed in bulk by CVD fleets.',
+     zhD:'CVD 机群大量消耗的硅源与反应气体。',
+     v:[{n:'Resonac', t:'TYO: 4004'},{n:'Linde', t:'NASDAQ: LIN'},{n:'Nippon Sanso', t:'TYO: 4091'},{n:'Air Liquide', t:'EPA: AI'}]},
+    {n:'Sputtering targets (Cu/Ti/Ta/W/Co)', zh:'溅射靶材（铜/钛/钽/钨/钴）', w:'$25–60', wk:'mat',
+     d:'Ultra-high-purity metal targets consumed by PVD; JX leads with ~60% of semiconductor targets.',
+     zhD:'PVD 消耗的超高纯金属靶材；JX 以约 60% 份额居首。',
+     v:[{n:'JX Advanced Metals', t:'TYO: 5016', r:'~60% leader', zhR:'约 60% 份额居首'},{n:'Materion', t:'NYSE: MTRN'},{n:'Tosoh', t:'TYO: 4042'},{n:'Plansee', t:'Private', zhT:'非上市'},{n:'Honeywell', t:'NASDAQ: HON'}]}
+  ]
+},
+{ id:'cmp', n:'CMP Planarization', zh:'化学机械抛光（CMP）', short:'CMP', zhShort:'CMP', tag:'Front-end (FEOL)', zhTag:'前道工艺',
+  d:'Chemical-mechanical planarization flattens each layer to nanometre level — STI, tungsten, copper and dielectric CMP, 25–30 passes per leading-edge flow. The tools are a duopoly; the consumables are the recurring annuity.',
+  zhD:'化学机械抛光把每一层平坦化到纳米级——STI、钨、铜与介质 CMP，先进流程要做 25–30 次。设备双寡头；耗材是经常性年金。',
+  tot:'Tools ≈$200–320 · materials ≈$95–190 per wafer (est.)', zhTot:'设备约 $200–320 · 材料约 $95–190 / 片（估算）',
+  steps:[['Polish','研磨抛光'],['Endpoint detection','终点检测'],['Post-CMP clean','抛光后清洗'],['Thickness metrology','膜厚量测']],
+  eq:[
+    {n:'CMP systems', zh:'CMP 设备', w:'$200–320', wk:'dep',
+     d:'AMAT Reflexion ~70%; Ebara holds the rest.',
+     zhD:'应材 Reflexion 约 70%；其余为荏原。',
+     v:[{n:'Applied Materials (Reflexion)', t:'NASDAQ: AMAT', r:'~70%', zhR:'约 70%'},{n:'Ebara', t:'TYO: 6361'}]}
+  ],
+  mat:[
+    {n:'CMP slurries', zh:'CMP 研磨液', w:'$60–110', wk:'mat',
+     d:'Silica/ceria/alumina abrasives plus chemistry tuned per film.',
+     zhD:'二氧化硅/氧化铈/氧化铝磨料加按膜种调配的化学体系。',
+     v:[{n:'Entegris (CMC)', t:'NASDAQ: ENTG', r:'#1', zhR:'第一'},{n:'Fujimi', t:'TYO: 5384'},{n:'Resonac', t:'TYO: 4004'},{n:'FujiFilm', t:'TYO: 4901'},{n:'Soulbrain', t:'KOSDAQ: 357780'}]},
+    {n:'Polishing pads', zh:'抛光垫', w:'$20–40', wk:'mat',
+     d:'DuPont’s IC1000/IKONIC family dominates the pad market.',
+     zhD:'杜邦 IC1000/IKONIC 系列垄断抛光垫市场。',
+     v:[{n:'DuPont', t:'NYSE: DD', r:'dominant', zhR:'主导'},{n:'3M', t:'NYSE: MMM'}]},
+    {n:'Diamond pad conditioners', zh:'金刚石修整盘', w:'$5–15', wk:'mat',
+     d:'Re-roughen pads between wafers to keep removal rates stable.',
+     zhD:'在晶圆之间修整抛光垫，维持去除速率稳定。',
+     v:[{n:'Kinik', t:'TWSE: 1560'},{n:'Asahi Diamond', t:'TYO: 6140'},{n:'3M', t:'NYSE: MMM'}]},
+    {n:'Post-CMP clean chemistry', zh:'CMP 后清洗化学品', w:'$10–25', wk:'mat',
+     d:'Removes slurry residue without corroding fresh copper.',
+     zhD:'去除研磨液残留且不腐蚀新鲜铜面。',
+     v:[{n:'Entegris', t:'NASDAQ: ENTG'},{n:'FujiFilm', t:'TYO: 4901'},{n:'Mitsubishi Chemical', t:'TYO: 4188'}]}
+  ]
+},
+{ id:'metro', n:'Metrology & Inspection (in-line)', zh:'量测与检测（在线）', short:'Metrology', zhShort:'量检测', tag:'In-line', zhTag:'在线贯穿',
+  d:'The eyes of the fab, threaded through every loop: optical/e-beam defect inspection, CD-SEM, OCD scatterometry, overlay and film metrology — plus a steady burn of monitor wafers. ~10–12% of fab capex; KLA is the reference franchise.',
+  zhD:'贯穿每个工序环路的"工厂之眼"：光学/电子束缺陷检测、CD-SEM、OCD 散射量测、套刻与膜厚量测，外加持续消耗的监控片。约占晶圆厂资本开支 10–12%；KLA 是行业标杆。',
+  tot:'Tools ≈$550–900 · materials ≈$20–50 per wafer (est.)', zhTot:'设备约 $550–900 · 材料约 $20–50 / 片（估算）',
+  steps:[['Defect inspection','缺陷检测'],['CD & profile','线宽与轮廓'],['Overlay','套刻'],['Film thickness','膜厚'],['Review & disposition','复核与处置']],
+  eq:[
+    {n:'Optical & e-beam defect inspection', zh:'光学与电子束缺陷检测', w:'$300–450', wk:'dep',
+     d:'Find killer defects at 10⁻⁹ density; KLA dominates broadband-plasma optical inspection.',
+     zhD:'在十亿分之一密度下捕捉致命缺陷；KLA 主导宽带等离子光学检测。',
+     v:[{n:'KLA', t:'NASDAQ: KLAC', r:'dominant', zhR:'主导'},{n:'Applied Materials', t:'NASDAQ: AMAT'},{n:'Hitachi High-Tech', t:'Hitachi (TYO: 6501)', zhT:'日立旗下'},{n:'ASML (HMI multi-beam)', t:'NASDAQ/AMS: ASML'}]},
+    {n:'CD-SEM & OCD scatterometry', zh:'CD-SEM 与 OCD 散射量测', w:'$120–200', wk:'dep',
+     d:'Critical-dimension measurement at sub-nm repeatability.',
+     zhD:'亚纳米重复精度的关键尺寸量测。',
+     v:[{n:'Hitachi High-Tech', t:'Hitachi (TYO: 6501)', r:'CD-SEM leader', zhR:'CD-SEM 龙头'},{n:'KLA', t:'NASDAQ: KLAC'},{n:'Nova', t:'NASDAQ: NVMI'},{n:'Onto Innovation', t:'NYSE: ONTO'}]},
+    {n:'Overlay metrology', zh:'套刻量测', w:'$80–150', wk:'dep',
+     d:'Layer-to-layer alignment verification feeding scanner corrections.',
+     zhD:'层间对准验证，反馈光刻机校正。',
+     v:[{n:'KLA (Archer)', t:'NASDAQ: KLAC'},{n:'ASML (YieldStar)', t:'NASDAQ/AMS: ASML'}]},
+    {n:'X-ray / AFM / TEM analysis', zh:'X 射线/原子力/透射电镜分析', w:'$50–100', wk:'dep',
+     d:'Off-line materials labs: XRD, AFM reference metrology, TEM cross-sections.',
+     zhD:'离线材料实验室：XRD、AFM 基准量测、TEM 切片。',
+     v:[{n:'Bruker', t:'NASDAQ: BRKR'},{n:'Park Systems', t:'KOSDAQ: 140860'},{n:'Camtek', t:'NASDAQ: CAMT'},{n:'Thermo Fisher', t:'NYSE: TMO'}]}
+  ],
+  mat:[
+    {n:'Monitor / test wafers (incl. reclaim)', zh:'监控片/陪片（含再生片）', w:'$20–50', wk:'mat',
+     d:'Fabs burn thousands of monitor wafers monthly; reclaimed wafers are a niche industry of their own.',
+     zhD:'晶圆厂每月消耗数千片监控片；晶圆再生本身就是一门利基生意。',
+     v:[{n:'SUMCO', t:'TYO: 3436'},{n:'GlobalWafers', t:'TPEx: 6488'},{n:'RS Technologies', t:'TYO: 3445', r:'reclaim leader', zhR:'再生片龙头'}]}
+  ]
+},
+{ id:'beol', n:'BEOL Interconnect (Cu damascene)', zh:'后道互连（铜大马士革）', short:'BEOL', zhShort:'互连', tag:'Interconnect (BEOL)', zhTag:'后道互连',
+  d:'15–18 copper metal layers wire up ~50 billion transistors: low-k dielectric → dual-damascene etch → TaN barrier + Co liner → Cu seed (PVD) → electroplating fill → anneal → CMP, repeated per layer. The 2 nm era adds ruthenium lines and backside power delivery.',
+  zhD:'15–18 层铜布线连接约 500 亿晶体管：低 k 介质 → 双大马士革刻蚀 → TaN 阻挡层 + Co 衬垫 → 铜种子层（PVD）→ 电镀填充 → 退火 → CMP，逐层重复。2nm 时代引入钌互连与背面供电。',
+  tot:'Incremental tools ≈$80–140 (PVD/CVD/etch fleets counted in their own stages) · materials ≈$60–130 per wafer (est.)', zhTot:'增量设备约 $80–140（PVD/CVD/刻蚀机群计入各自阶段）· 材料约 $60–130 / 片（估算）',
+  steps:[['Low-k deposition','低 k 介质沉积'],['Dual-damascene etch','双大马士革刻蚀'],['Barrier & seed','阻挡层与种子层'],['Cu electroplating','铜电镀'],['Anneal & CMP','退火与 CMP']],
+  eq:[
+    {n:'ECD copper plating systems', zh:'铜电镀（ECD）设备', w:'$80–140', wk:'dep',
+     d:'Electrochemical deposition fills nanometre trenches bottom-up; Lam’s SABRE dominates.',
+     zhD:'电化学沉积自下而上填充纳米沟槽；Lam SABRE 占主导。',
+     v:[{n:'Lam Research (SABRE)', t:'NASDAQ: LRCX', r:'dominant', zhR:'主导'},{n:'Applied Materials', t:'NASDAQ: AMAT'}]},
+    {n:'Barrier / seed PVD', zh:'阻挡层/种子层 PVD', w:'in Depo', wk:'dep',
+     d:'TaN/Cu-seed sputtering on AMAT Endura — tool dollars counted under the Deposition stage.',
+     zhD:'TaN/铜种子层溅射在应材 Endura 上完成——设备金额计入薄膜沉积阶段。',
+     v:[{n:'Applied Materials (Endura)', t:'NASDAQ: AMAT'}]}
+  ],
+  mat:[
+    {n:'Cu plating chemistry & anodes', zh:'铜电镀液与阳极', w:'$25–50', wk:'mat',
+     d:'Accelerator/suppressor/leveler additive packages are closely-held trade secrets.',
+     zhD:'加速剂/抑制剂/整平剂添加剂配方是高度保密的商业机密。',
+     v:[{n:'MKS (Atotech)', t:'NASDAQ: MKSI'},{n:'Element Solutions (MacDermid)', t:'NYSE: ESI'},{n:'Ishihara Chemical', t:'Private', zhT:'非上市'},{n:'JX Advanced Metals (anodes)', t:'TYO: 5016'}]},
+    {n:'Low-k & barrier precursors', zh:'低 k 与阻挡层前驱体', w:'$20–40', wk:'mat',
+     d:'Carbon-doped oxide precursors and porogens that lower RC delay.',
+     zhD:'降低 RC 延迟的碳掺杂氧化物前驱体与致孔剂。',
+     v:[{n:'Merck KGaA', t:'ETR: MRK'},{n:'Air Liquide', t:'EPA: AI'},{n:'Adeka', t:'TYO: 4401'}]},
+    {n:'Co / Ru precursors & precious metals', zh:'钴/钌前驱体与贵金属', w:'$15–40', wk:'mat',
+     d:'Cobalt liners today, ruthenium interconnects next — Furuya is the listed Ru pure-play.',
+     zhD:'今天的钴衬垫、下一步的钌互连——Furuya 是钌的上市纯标的。',
+     v:[{n:'Furuya Metal', t:'TYO: 7826', r:'Ru specialist', zhR:'钌专家'},{n:'Tanaka Precious Metals', t:'Private', zhT:'非上市'},{n:'Merck KGaA (EMD)', t:'ETR: MRK'}]}
+  ]
+},
+{ id:'test', n:'Wafer Probe / Sort', zh:'晶圆测试（中测）', short:'Sort', zhShort:'中测', tag:'Test', zhTag:'测试',
+  d:'Parametric e-test (WAT) on scribe-line structures, then every die is probed on ATE. Known-good-die maps gate chiplet and HBM assembly — where one bad die can kill a $3,000 package.',
+  zhD:'先在切割道结构上做参数测试（WAT），再用 ATE 对每颗裸片逐一探测。良品裸片（KGD）地图决定 chiplet 与 HBM 组装——一颗坏片可能毁掉一个 $3,000 的封装。',
+  tot:'Tools ≈$160–300 · materials ≈$40–80 per wafer (est.)', zhTot:'设备约 $160–300 · 材料约 $40–80 / 片（估算）',
+  steps:[['Parametric test (WAT)','参数测试'],['Wafer probe','晶圆探测'],['Binning & KGD map','分级与良品图']],
+  eq:[
+    {n:'ATE test systems', zh:'ATE 测试机', w:'$120–220', wk:'dep',
+     d:'Advantest leads SoC and HBM test; Teradyne is the duopoly partner.',
+     zhD:'爱德万在 SoC 与 HBM 测试领先；泰瑞达构成双寡头。',
+     v:[{n:'Advantest', t:'TYO: 6857', r:'SoC/HBM leader', zhR:'SoC/HBM 龙头'},{n:'Teradyne', t:'NASDAQ: TER'}]},
+    {n:'Wafer probers', zh:'晶圆探针台', w:'$40–80', wk:'dep',
+     d:'Position each die against the probe card at micron accuracy — a TEL/Accretech duopoly.',
+     zhD:'以微米精度将每颗裸片对准探针卡——东京电子/Accretech 双寡头。',
+     v:[{n:'Tokyo Electron', t:'TYO: 8035'},{n:'Accretech', t:'TYO: 7729'}]}
+  ],
+  mat:[
+    {n:'Probe cards', zh:'探针卡', w:'$40–80', wk:'mat',
+     d:'Design-specific MEMS probe cards, effectively a consumable per product generation.',
+     zhD:'按芯片设计定制的 MEMS 探针卡，每代产品一换，实质是耗材。',
+     v:[{n:'FormFactor', t:'NASDAQ: FORM'},{n:'Technoprobe', t:'BIT: TPRO'},{n:'Micronics Japan', t:'TYO: 6871'},{n:'MPI', t:'TPEx: 6223'}]}
+  ]
+},
+{ id:'pkg', n:'Packaging & Assembly', zh:'封装与组装', short:'Package', zhShort:'封装', tag:'Back-end / OSAT', zhTag:'封装后道',
+  d:'Back-grind → dice → die attach / bonding → underfill & mold. Leading-edge AI silicon flows through 2.5D/3D advanced packaging — CoWoS, SoIC, Foveros, HBM stacks via TCB and hybrid bonding — now a genuine bottleneck and value pool.',
+  zhD:'背面减薄 → 划片 → 贴片/键合 → 底填与塑封。先进 AI 芯片要经过 2.5D/3D 先进封装——CoWoS、SoIC、Foveros，以及用 TCB 与混合键合堆叠的 HBM——如今是真正的瓶颈与价值池。',
+  tot:'Tools ≈$110–290 · materials ≈$350–1,000+ for HPC parts (substrate-dominated) per wafer-equivalent (est.)', zhTot:'设备约 $110–290 · HPC 产品材料约 $350–1,000+/片当量（基板主导，估算）',
+  steps:[['Back-grind','背面减薄'],['Dicing','划片'],['Die attach & bonding','贴片与键合'],['Underfill & mold','底填与塑封'],['2.5D/3D integration','2.5D/3D 集成']],
+  eq:[
+    {n:'Grinders & dicing saws/lasers', zh:'减薄机与划片机', w:'$30–60', wk:'dep',
+     d:'Disco holds ~80% of dicing — the quietest near-monopoly in semiconductors.',
+     zhD:'迪斯科占划片约 80%——半导体行业最低调的准垄断。',
+     v:[{n:'Disco', t:'TYO: 6146', r:'~80%', zhR:'约 80%'},{n:'Accretech', t:'TYO: 7729'}]},
+    {n:'Bonders (TCB / hybrid / flip-chip / wire)', zh:'键合机（TCB/混合/倒装/引线）', w:'$50–150', wk:'dep',
+     d:'Hybrid bonding (BESI + AMAT partnership) and TCB (ASMPT) are the HBM/chiplet enablers.',
+     zhD:'混合键合（BESI 与应材合作）与 TCB（ASMPT）是 HBM/chiplet 的关键使能设备。',
+     v:[{n:'BE Semiconductor (BESI)', t:'AMS: BESI', r:'hybrid-bonding leader', zhR:'混合键合龙头'},{n:'ASMPT', t:'HKG: 0522'},{n:'Kulicke & Soffa', t:'NASDAQ: KLIC'},{n:'EV Group', t:'Private', zhT:'非上市'},{n:'SUSS MicroTec', t:'ETR: SMHN'}]},
+    {n:'RDL litho & plating (fan-out / interposer)', zh:'再布线光刻与电镀（扇出/中介层）', w:'$30–80', wk:'dep',
+     d:'Panel/wafer-level redistribution layers and bumping lines for advanced packages.',
+     zhD:'先进封装所需的晶圆/面板级再布线与凸点产线。',
+     v:[{n:'Ushio', t:'TYO: 6925'},{n:'Canon', t:'TYO: 7751'},{n:'Lam Research', t:'NASDAQ: LRCX'},{n:'Applied Materials', t:'NASDAQ: AMAT'},{n:'Screen', t:'TYO: 7735'}]}
+  ],
+  mat:[
+    {n:'IC substrates (ABF / FC-BGA)', zh:'IC 载板（ABF/FC-BGA）', w:'$300–900', wk:'mat',
+     d:'The single biggest packaging material cost for HPC. Ajinomoto’s ABF build-up film is a near-monopoly input.',
+     zhD:'HPC 封装中最大的单项材料成本。味之素的 ABF 积层膜是近乎垄断的关键输入。',
+     v:[{n:'Ibiden', t:'TYO: 4062'},{n:'Shinko Electric', t:'TYO: 6967', r:'JIC take-private', zhR:'JIC 私有化中'},{n:'Unimicron', t:'TWSE: 3037'},{n:'AT&S', t:'VIE: ATS'},{n:'Nan Ya PCB', t:'TWSE: 8046'},{n:'Ajinomoto (ABF film)', t:'TYO: 2802', r:'near-monopoly film', zhR:'积层膜近乎垄断'}]},
+    {n:'Mold compounds, underfill & die-attach', zh:'塑封料、底填胶与贴片材料', w:'$30–80', wk:'mat',
+     d:'Epoxy systems protecting and stress-buffering the die.',
+     zhD:'保护裸片并缓冲应力的环氧体系。',
+     v:[{n:'Resonac', t:'TYO: 4004'},{n:'Sumitomo Bakelite', t:'TYO: 4203'},{n:'Namics', t:'Private', zhT:'非上市'},{n:'Henkel', t:'ETR: HEN3'}]},
+    {n:'Solder, Cu pillar & bump chemistry', zh:'焊料、铜柱与凸点化学品', w:'$15–40', wk:'mat',
+     d:'Micro-bumps shrink toward bumpless hybrid bonding at the leading edge.',
+     zhD:'微凸点不断缩小，前沿走向无凸点混合键合。',
+     v:[{n:'Senju Metal', t:'Private', zhT:'非上市'},{n:'Element Solutions', t:'NYSE: ESI'},{n:'Mitsui Mining & Smelting', t:'TYO: 5706'}]}
+  ],
+  note:'OSAT service providers — ASE (TWSE: 3711), Amkor (NASDAQ: AMKR), JCET (SHA: 600584), PTI (TWSE: 6239) — assemble most of the world’s chips, though leading AI packages increasingly stay inside TSMC.',
+  zhNote:'封测代工（OSAT）——日月光（TWSE: 3711）、Amkor（NASDAQ: AMKR）、长电科技（SHA: 600584）、力成（TWSE: 6239）——组装全球大部分芯片；但最先进的 AI 封装越来越多留在台积电体内完成。'
+},
+{ id:'ftest', n:'Final Test & Burn-in', zh:'成品测试与老化', short:'Final test', zhShort:'终测', tag:'Test', zhTag:'测试',
+  d:'Packaged parts hit ATE again, plus system-level test and burn-in for HPC/automotive parts; speed and power binning set the final ASP stack of every product line.',
+  zhD:'封装后的芯片再次上 ATE，并对 HPC/车规器件做系统级测试与老化；速度与功耗分级决定每条产品线最终的价格梯度。',
+  tot:'Tools ≈$85–190 per wafer-equivalent (est.); socket/board consumables inside', zhTot:'设备约 $85–190 / 片当量（估算）；插座/载板耗材含于其中',
+  steps:[['Package test','成品测试'],['Burn-in','老化'],['System-level test','系统级测试'],['Binning & ship','分级出货']],
+  eq:[
+    {n:'ATE (final test)', zh:'ATE（终测）', w:'$60–120', wk:'dep',
+     d:'The same Advantest/Teradyne duopoly as wafer sort, with different load boards.',
+     zhD:'与中测相同的爱德万/泰瑞达双寡头，载板不同。',
+     v:[{n:'Advantest', t:'TYO: 6857'},{n:'Teradyne', t:'NASDAQ: TER'}]},
+    {n:'Handlers & test sockets', zh:'分选机与测试插座', w:'$15–40', wk:'dep',
+     d:'Pick-place-thermally-condition each unit into contactors; sockets are per-design consumables.',
+     zhD:'抓取、放置并温控每颗芯片接入触点；插座按设计定制、属耗材。',
+     v:[{n:'Cohu', t:'NASDAQ: COHU'},{n:'ISC', t:'KOSDAQ: 095340'},{n:'Leeno', t:'KOSDAQ: 058470'},{n:'Yamaichi', t:'Private', zhT:'非上市'}]},
+    {n:'Burn-in & system-level test', zh:'老化与系统级测试', w:'$10–30', wk:'dep',
+     d:'Hours at elevated voltage/temperature to weed out infant mortality — mandatory for AI/auto silicon.',
+     zhD:'高压高温数小时筛除早期失效——AI/车规芯片的必修课。',
+     v:[{n:'Aehr Test Systems', t:'NASDAQ: AEHR'},{n:'Advantest', t:'TYO: 6857'},{n:'King Yuan (KYEC)', t:'TWSE: 2449', r:'service', zhR:'测试代工'}]}
+  ],
+  mat:[]
+}
+];
+
+/* ---- per-stage interactive schematics: .gx groups map to eq/mat items via data-k ---- */
+const GFX = {
+design: ()=>`<svg viewBox="0 0 960 250" xmlns="http://www.w3.org/2000/svg">
+  <g class="gx" data-k="e0">
+    <rect class="shp f-inf" x="50" y="35" width="210" height="130" rx="9"/>
+    <rect x="66" y="50" width="178" height="92" fill="#0b1020" stroke="#2c4271"/>
+    <rect x="78" y="60" width="62" height="32" fill="rgba(124,196,255,.28)"/>
+    <rect x="150" y="60" width="80" height="20" fill="rgba(177,151,252,.28)"/>
+    <rect x="78" y="102" width="152" height="28" fill="rgba(105,219,124,.18)"/>
+    <rect x="135" y="165" width="40" height="12" fill="#16233e" stroke="#2c4271"/>
+    <text class="lbl" x="52" y="200">${T('EDA workstation — synthesis · place-route · signoff','EDA 工作站 — 综合 · 布线 · 签核')}</text>
+  </g>
+  <line x1="270" y1="100" x2="345" y2="100" stroke="#44537a" stroke-dasharray="5 5"/>
+  <g class="gx" data-k="e1">
+    <rect class="shp f-inf" x="355" y="35" width="250" height="150" rx="9"/>
+    <rect x="372" y="52" width="90" height="55" fill="rgba(124,196,255,.22)" stroke="#2c4271"/><text class="lbl-s" x="382" y="83">CPU</text>
+    <rect x="472" y="52" width="58" height="55" fill="rgba(177,151,252,.22)" stroke="#2c4271"/><text class="lbl-s" x="480" y="83">GPU</text>
+    <rect x="540" y="52" width="50" height="118" fill="rgba(56,217,169,.18)" stroke="#2c4271"/><text class="lbl-s" x="544" y="115">SerDes</text>
+    <rect x="372" y="117" width="158" height="53" fill="rgba(255,169,77,.16)" stroke="#2c4271"/><text class="lbl-s" x="382" y="147">${T('licensed IP blocks','授权 IP 模块')}</text>
+    <text class="lbl" x="357" y="210">${T('SoC floorplan — IP cores + PDK','SoC 布局 — IP 核与 PDK')}</text>
+  </g>
+  <line x1="615" y1="100" x2="688" y2="100" stroke="#44537a" stroke-dasharray="5 5"/>
+  <g class="gx" data-k="e2">
+    <rect class="shp f-inf" x="698" y="35" width="150" height="160" rx="9"/>
+    <rect x="712" y="50" width="122" height="18" fill="#101c33" stroke="#2c4271"/><circle cx="822" cy="59" r="3" fill="#69db7c"/>
+    <rect x="712" y="78" width="122" height="18" fill="#101c33" stroke="#2c4271"/><circle cx="822" cy="87" r="3" fill="#69db7c"/>
+    <rect x="712" y="106" width="122" height="18" fill="#101c33" stroke="#2c4271"/><circle cx="822" cy="115" r="3" fill="#69db7c"/>
+    <rect x="712" y="134" width="122" height="18" fill="#101c33" stroke="#2c4271"/><circle cx="822" cy="143" r="3" fill="#69db7c"/>
+    <rect x="712" y="162" width="122" height="18" fill="#101c33" stroke="#2c4271"/><circle cx="822" cy="171" r="3" fill="#69db7c"/>
+    <text class="lbl" x="698" y="218">${T('Verification + sim compute','验证与仿真算力')}</text>
+  </g>
+  <text class="lbl" x="868" y="105">${T('GDSII →','GDSII →')}</text>
+</svg>`,
+mask: ()=>`<svg viewBox="0 0 960 250" xmlns="http://www.w3.org/2000/svg">
+  <g class="gx" data-k="e0">
+    <path class="shp f-inf" d="M108,28 h64 l16,62 h-96 z"/>
+    <rect class="shp f-inf" x="96" y="92" width="88" height="14" rx="3"/>
+    <line x1="140" y1="106" x2="140" y2="160" stroke="#c39bff" stroke-dasharray="3 5"/>
+    <text class="lbl" x="58" y="225">${T('Multi-beam e-beam writer','多束电子束写制机')}</text>
+  </g>
+  <g class="gx" data-k="m0">
+    <rect class="shp f-stg" x="70" y="162" width="140" height="10"/>
+    <text class="lbl-s" x="220" y="170">${T('← blank (Mo/Si ML + absorber)','← 基板（多层膜+吸收层）')}</text>
+  </g>
+  <g class="gx" data-k="m2">
+    <rect class="shp f-stg" x="70" y="172" width="140" height="16"/>
+    <text class="lbl-s" x="220" y="186">${T('← LTEM glass','← 低膨胀玻璃')}</text>
+  </g>
+  <g class="gx" data-k="e1">
+    <rect class="shp f-inf" x="420" y="32" width="120" height="55" rx="8"/>
+    <path d="M480,87 L450,150 h60 z" fill="rgba(177,151,252,.15)" stroke="rgba(177,151,252,.5)"/>
+    <rect x="420" y="152" width="120" height="12" fill="#1b2a4a" stroke="#2c4271"/>
+    <text class="lbl" x="398" y="225">${T('Actinic / e-beam inspection','光化 / 电子束检测')}</text>
+  </g>
+  <g class="gx" data-k="e2">
+    <rect class="shp f-inf" x="608" y="40" width="84" height="60" rx="8"/>
+    <line x1="650" y1="100" x2="650" y2="150" stroke="#7cc4ff" stroke-dasharray="2 4"/>
+    <rect x="600" y="152" width="100" height="12" fill="#1b2a4a" stroke="#2c4271"/>
+    <text class="lbl" x="588" y="225">${T('Repair + CD metrology','修复与线宽量测')}</text>
+  </g>
+  <g class="gx" data-k="m1">
+    <rect x="760" y="152" width="110" height="12" fill="#1b2a4a" stroke="#2c4271"/>
+    <line class="shp" x1="764" y1="140" x2="866" y2="140" stroke="rgba(56,217,169,.95)" stroke-width="2.5"/>
+    <line x1="764" y1="140" x2="764" y2="152" stroke="rgba(56,217,169,.6)"/>
+    <line x1="866" y1="140" x2="866" y2="152" stroke="rgba(56,217,169,.6)"/>
+    <text class="lbl" x="752" y="195">${T('Pellicle on mask','掩模+保护膜')}</text>
+  </g>
+  <g class="gx" data-k="m3">
+    <rect class="shp f-stg" x="880" y="55" width="66" height="42" rx="6"/>
+    <rect class="shp f-stg" x="892" y="44" width="42" height="11" rx="3"/>
+    <text class="lbl-s" x="878" y="120">${T('dual pod','传送盒')}</text>
+  </g>
+</svg>`,
+substrate: ()=>`<svg viewBox="0 0 960 250" xmlns="http://www.w3.org/2000/svg">
+  <g class="gx" data-k="m1">
+    <polygon class="shp f-stg" points="18,150 38,135 56,148 48,168 24,168"/>
+    <polygon class="shp f-stg" points="34,172 54,160 68,174 56,188 38,186"/>
+    <text class="lbl-s" x="10" y="208">${T('poly-Si','多晶硅')}</text>
+  </g>
+  <g class="gx" data-k="e0">
+    <rect class="shp f-inf" x="95" y="28" width="130" height="192" rx="10"/>
+    <line x1="160" y1="36" x2="160" y2="78" stroke="#9fb0cf"/>
+    <rect x="142" y="78" width="36" height="62" rx="7" fill="#cfd8ea" opacity=".9"/>
+    <text class="lbl" x="90" y="240">${T('CZ crystal puller','直拉单晶炉')}</text>
+  </g>
+  <g class="gx" data-k="m2">
+    <path class="shp f-stg" d="M118,152 q42,42 84,0 v20 q-42,32 -84,0 z"/>
+    <path d="M126,154 q34,30 68,0 v8 q-34,24 -68,0 z" fill="rgba(255,169,77,.55)"/>
+    <text class="lbl-s" x="232" y="178">${T('← crucible + melt','← 坩埚与熔体')}</text>
+  </g>
+  <g class="gx" data-k="e1">
+    <rect class="shp f-inf" x="300" y="55" width="150" height="125" rx="8"/>
+    <rect x="318" y="100" width="114" height="36" rx="18" fill="#cfd8ea" opacity=".85"/>
+    <text class="lbl" x="296" y="205">${T('Wire saw + grinding','线锯与磨削')}</text>
+  </g>
+  <g class="gx" data-k="m3">
+    <line class="shp" x1="328" y1="68" x2="328" y2="150" stroke="rgba(56,217,169,.9)" stroke-width="2"/>
+    <line class="shp" x1="348" y1="68" x2="348" y2="150" stroke="rgba(56,217,169,.9)" stroke-width="2"/>
+    <line class="shp" x1="368" y1="68" x2="368" y2="150" stroke="rgba(56,217,169,.9)" stroke-width="2"/>
+    <line class="shp" x1="388" y1="68" x2="388" y2="150" stroke="rgba(56,217,169,.9)" stroke-width="2"/>
+    <line class="shp" x1="408" y1="68" x2="408" y2="150" stroke="rgba(56,217,169,.9)" stroke-width="2"/>
+    <text class="lbl-s" x="320" y="62">${T('diamond wire','金刚石线')}</text>
+  </g>
+  <g class="gx" data-k="e2">
+    <rect class="shp f-inf" x="495" y="55" width="175" height="125" rx="8"/>
+    <ellipse cx="550" cy="140" rx="38" ry="10" fill="#1b2a4a" stroke="#2c4271"/>
+    <ellipse cx="550" cy="132" rx="24" ry="7" fill="#cfd8ea"/>
+    <path d="M610,95 a26,20 0 0 1 52,0 v32 h-52 z" fill="rgba(116,143,252,.12)" stroke="rgba(116,143,252,.6)"/>
+    <text class="lbl" x="492" y="205">${T('Polish + epitaxy','抛光与外延')}</text>
+  </g>
+  <g class="gx" data-k="e3">
+    <rect class="shp f-inf" x="712" y="62" width="112" height="112" rx="8"/>
+    <path d="M768,78 L748,120 h40 z" fill="rgba(124,196,255,.15)" stroke="rgba(124,196,255,.5)"/>
+    <ellipse cx="768" cy="132" rx="32" ry="8" fill="#cfd8ea" opacity=".9"/>
+    <text class="lbl" x="706" y="205">${T('Wafer inspection','硅片检测')}</text>
+  </g>
+  <g class="gx" data-k="m0">
+    <circle class="shp" cx="892" cy="115" r="38" fill="#cfd8ea" stroke="#9fb0cf" stroke-width="2"/>
+    <circle cx="880" cy="103" r="8" fill="#ffffff" opacity=".7"/>
+    <text class="lbl" x="852" y="180">${T('Prime epi wafer','成品外延片')}</text>
+  </g>
+</svg>`,
+thermal: ()=>`<svg viewBox="0 0 960 250" xmlns="http://www.w3.org/2000/svg">
+  <g class="gx" data-k="e0">
+    <rect class="shp f-inf" x="120" y="25" width="140" height="195" rx="12"/>
+    <line x1="112" y1="55" x2="120" y2="55" stroke="#ffa94d" stroke-width="3"/><line x1="260" y1="55" x2="268" y2="55" stroke="#ffa94d" stroke-width="3"/>
+    <line x1="112" y1="95" x2="120" y2="95" stroke="#ffa94d" stroke-width="3"/><line x1="260" y1="95" x2="268" y2="95" stroke="#ffa94d" stroke-width="3"/>
+    <line x1="112" y1="135" x2="120" y2="135" stroke="#ffa94d" stroke-width="3"/><line x1="260" y1="135" x2="268" y2="135" stroke="#ffa94d" stroke-width="3"/>
+    <line x1="112" y1="175" x2="120" y2="175" stroke="#ffa94d" stroke-width="3"/><line x1="260" y1="175" x2="268" y2="175" stroke="#ffa94d" stroke-width="3"/>
+    <text class="lbl" x="100" y="240">${T('Vertical batch furnace','立式炉管')}</text>
+  </g>
+  <g class="gx" data-k="m2">
+    <rect class="shp f-stg" x="136" y="40" width="108" height="168" rx="9" fill="none"/>
+    <text class="lbl-s" x="270" y="220">${T('← SiC / quartz tube liner','← SiC/石英内衬')}</text>
+  </g>
+  <g class="gx" data-k="m1">
+    <line x1="158" y1="58" x2="158" y2="195" stroke="rgba(56,217,169,.8)" stroke-width="2"/>
+    <line x1="222" y1="58" x2="222" y2="195" stroke="rgba(56,217,169,.8)" stroke-width="2"/>
+    <line class="shp" x1="150" y1="70" x2="230" y2="70" stroke="#cfd8ea" stroke-width="2.4"/>
+    <line class="shp" x1="150" y1="92" x2="230" y2="92" stroke="#cfd8ea" stroke-width="2.4"/>
+    <line class="shp" x1="150" y1="114" x2="230" y2="114" stroke="#cfd8ea" stroke-width="2.4"/>
+    <line class="shp" x1="150" y1="136" x2="230" y2="136" stroke="#cfd8ea" stroke-width="2.4"/>
+    <line class="shp" x1="150" y1="158" x2="230" y2="158" stroke="#cfd8ea" stroke-width="2.4"/>
+    <line class="shp" x1="150" y1="180" x2="230" y2="180" stroke="#cfd8ea" stroke-width="2.4"/>
+    <text class="lbl-s" x="270" y="120">${T('← quartz boat, 100+ wafers','← 石英晶舟（百片级）')}</text>
+  </g>
+  <g class="gx" data-k="e1">
+    <rect class="shp f-inf" x="470" y="60" width="200" height="120" rx="10"/>
+    <circle cx="505" cy="85" r="9" fill="rgba(255,169,77,.8)"/><circle cx="540" cy="85" r="9" fill="rgba(255,169,77,.8)"/><circle cx="575" cy="85" r="9" fill="rgba(255,169,77,.8)"/><circle cx="610" cy="85" r="9" fill="rgba(255,169,77,.8)"/><circle cx="640" cy="85" r="9" fill="rgba(255,169,77,.8)"/>
+    <line x1="495" y1="145" x2="648" y2="145" stroke="#cfd8ea" stroke-width="4"/>
+    <text class="lbl" x="455" y="205">${T('RTP / millisecond anneal (lamps)','快速热处理（灯组退火）')}</text>
+  </g>
+  <g class="gx" data-k="m0">
+    <rect class="shp f-stg" x="760" y="80" width="26" height="80" rx="8"/><rect class="shp f-stg" x="796" y="80" width="26" height="80" rx="8"/><rect class="shp f-stg" x="832" y="80" width="26" height="80" rx="8"/>
+    <text class="lbl-s" x="764" y="74">O₂</text><text class="lbl-s" x="800" y="74">H₂</text><text class="lbl-s" x="836" y="74">N₂</text>
+    <path d="M760,120 h-60 q-20,0 -20,-20 v-40 h-410" fill="none" stroke="#44537a" stroke-dasharray="4 5"/>
+    <text class="lbl" x="752" y="195">${T('Process gases','工艺气体')}</text>
+  </g>
+</svg>`,
+litho: ()=>`<svg viewBox="0 0 960 250" xmlns="http://www.w3.org/2000/svg">
+  <g class="gx" data-k="e0">
+    <rect class="shp f-inf" x="40" y="28" width="220" height="190" rx="10"/>
+    <circle cx="80" cy="180" r="7" fill="#ffd06b"/>
+    <path d="M80,180 L120,120 L170,150 L195,60" fill="none" stroke="#c39bff" stroke-dasharray="4 5"/>
+    <path d="M195,60 L205,140 L160,200" fill="none" stroke="#c39bff" stroke-dasharray="4 5"/>
+    <line x1="140" y1="202" x2="185" y2="202" stroke="#cfd8ea" stroke-width="4"/>
+    <text class="lbl" x="42" y="240">${T('EUV scanner (13.5 nm)','EUV 光刻机（13.5nm）')}</text>
+  </g>
+  <g class="gx" data-k="m2">
+    <rect class="shp f-stg" x="170" y="50" width="56" height="9"/>
+    <text class="lbl-s" x="232" y="58">${T('← mask','← 掩模')}</text>
+  </g>
+  <g class="gx" data-k="e1">
+    <rect class="shp f-inf" x="320" y="28" width="170" height="190" rx="10"/>
+    <ellipse cx="405" cy="70" rx="34" ry="9" fill="rgba(177,151,252,.3)" stroke="#8a78c8"/>
+    <ellipse cx="405" cy="100" rx="28" ry="8" fill="rgba(177,151,252,.3)" stroke="#8a78c8"/>
+    <ellipse cx="405" cy="130" rx="34" ry="9" fill="rgba(177,151,252,.3)" stroke="#8a78c8"/>
+    <line x1="405" y1="55" x2="405" y2="195" stroke="#c39bff" stroke-dasharray="3 5"/>
+    <line x1="380" y1="198" x2="430" y2="198" stroke="#cfd8ea" stroke-width="4"/>
+    <text class="lbl" x="316" y="240">${T('DUV scanner (lens column)','DUV 光刻机（透镜柱）')}</text>
+  </g>
+  <g class="gx" data-k="e2">
+    <rect class="shp f-inf" x="545" y="28" width="200" height="190" rx="10"/>
+    <circle cx="600" cy="140" r="34" fill="#101c33" stroke="#2c4271"/>
+    <circle cx="600" cy="140" r="22" fill="#cfd8ea" opacity=".85"/>
+    <circle cx="690" cy="140" r="34" fill="#101c33" stroke="#2c4271"/>
+    <circle cx="690" cy="140" r="22" fill="#cfd8ea" opacity=".85"/>
+    <text class="lbl" x="540" y="240">${T('Coater / developer track','涂胶显影轨道机')}</text>
+  </g>
+  <g class="gx" data-k="m0">
+    <rect class="shp f-stg" x="588" y="48" width="24" height="36" rx="5"/>
+    <line x1="600" y1="84" x2="600" y2="112" stroke="rgba(56,217,169,.9)" stroke-dasharray="3 4" stroke-width="2"/>
+    <text class="lbl-s" x="618" y="66">${T('resist','光刻胶')}</text>
+  </g>
+  <g class="gx" data-k="m1">
+    <rect class="shp f-stg" x="790" y="120" width="22" height="42" rx="5"/><rect class="shp f-stg" x="820" y="108" width="22" height="54" rx="5"/><rect class="shp f-stg" x="850" y="126" width="22" height="36" rx="5"/>
+    <text class="lbl" x="782" y="195">${T('BARC · developer · EBR','抗反射/显影/边胶清除')}</text>
+  </g>
+</svg>`,
+etch: ()=>`<svg viewBox="0 0 960 250" xmlns="http://www.w3.org/2000/svg">
+  <g class="gx" data-k="m0">
+    <rect class="shp f-stg" x="22" y="55" width="24" height="64" rx="7"/><rect class="shp f-stg" x="54" y="55" width="24" height="64" rx="7"/>
+    <text class="lbl-s" x="18" y="48">CF₄ · C₄F₆ · NF₃</text>
+  </g>
+  <g class="gx" data-k="m1">
+    <rect class="shp f-stg" x="38" y="150" width="24" height="56" rx="7"/>
+    <text class="lbl-s" x="20" y="225">Cl₂ · HBr</text>
+  </g>
+  <path d="M78,88 h60" stroke="#44537a" stroke-dasharray="4 5"/>
+  <path d="M62,176 h76 v-60" stroke="#44537a" stroke-dasharray="4 5" fill="none"/>
+  <g class="gx" data-k="e0">
+    <rect class="shp f-inf" x="140" y="35" width="200" height="170" rx="10"/>
+    <rect x="160" y="50" width="160" height="14" rx="4" fill="#1b2a4a" stroke="#2c4271"/>
+    <ellipse cx="240" cy="105" rx="70" ry="24" fill="rgba(177,151,252,.3)"/>
+    <line x1="180" y1="150" x2="300" y2="150" stroke="#cfd8ea" stroke-width="4"/>
+    <rect x="196" y="156" width="88" height="14" rx="3" fill="#1b2a4a" stroke="#2c4271"/>
+    <path d="M225,178 l10,8 l-10,8 l10,8" fill="none" stroke="#ffa94d"/>
+    <text class="lbl" x="138" y="228">${T('Conductor / Si etch (plasma)','导体/硅刻蚀（等离子体）')}</text>
+  </g>
+  <g class="gx" data-k="m2">
+    <rect class="shp f-stg" x="168" y="146" width="14" height="8" rx="2"/>
+    <rect class="shp f-stg" x="298" y="146" width="14" height="8" rx="2"/>
+    <text class="lbl-s" x="345" y="155">${T('← edge rings (consumable)','← 边缘环（耗材）')}</text>
+  </g>
+  <g class="gx" data-k="e1">
+    <rect class="shp f-inf" x="520" y="50" width="170" height="150" rx="10"/>
+    <rect x="538" y="64" width="134" height="12" rx="4" fill="#1b2a4a" stroke="#2c4271"/>
+    <ellipse cx="605" cy="110" rx="56" ry="20" fill="rgba(177,151,252,.3)"/>
+    <line x1="560" y1="150" x2="650" y2="150" stroke="#cfd8ea" stroke-width="4"/>
+    <text class="lbl" x="512" y="228">${T('Dielectric / high-AR etch','介质/高深宽比刻蚀')}</text>
+  </g>
+  <g class="gx" data-k="e2">
+    <rect class="shp f-inf" x="760" y="70" width="130" height="110" rx="10"/>
+    <ellipse cx="825" cy="110" rx="40" ry="14" fill="rgba(255,169,77,.3)"/>
+    <line x1="795" y1="145" x2="855" y2="145" stroke="#cfd8ea" stroke-width="4"/>
+    <text class="lbl" x="756" y="208">${T('Resist strip (ash)','去胶（灰化）')}</text>
+  </g>
+</svg>`,
+clean: ()=>`<svg viewBox="0 0 960 250" xmlns="http://www.w3.org/2000/svg">
+  <g class="gx" data-k="e0">
+    <path class="shp f-inf" d="M100,90 h180 v90 q0,14 -14,14 h-152 q-14,0 -14,-14 z"/>
+    <ellipse cx="190" cy="140" rx="55" ry="13" fill="#cfd8ea" opacity=".9"/>
+    <rect x="225" y="55" width="70" height="10" rx="4" fill="#1b2a4a" stroke="#2c4271"/>
+    <line x1="232" y1="65" x2="210" y2="120" stroke="rgba(124,196,255,.8)" stroke-dasharray="3 4" stroke-width="2"/>
+    <text class="lbl" x="96" y="225">${T('Single-wafer spin cleaner','单片旋转清洗机')}</text>
+  </g>
+  <g class="gx" data-k="e1">
+    <rect class="shp f-inf" x="360" y="80" width="170" height="110" rx="8"/>
+    <rect x="374" y="120" width="142" height="60" fill="rgba(116,143,252,.18)"/>
+    <line x1="400" y1="100" x2="400" y2="170" stroke="#cfd8ea" stroke-width="2.4"/>
+    <line x1="422" y1="100" x2="422" y2="170" stroke="#cfd8ea" stroke-width="2.4"/>
+    <line x1="444" y1="100" x2="444" y2="170" stroke="#cfd8ea" stroke-width="2.4"/>
+    <line x1="466" y1="100" x2="466" y2="170" stroke="#cfd8ea" stroke-width="2.4"/>
+    <line x1="488" y1="100" x2="488" y2="170" stroke="#cfd8ea" stroke-width="2.4"/>
+    <text class="lbl" x="356" y="225">${T('Batch wet bench','槽式清洗机')}</text>
+  </g>
+  <g class="gx" data-k="m0">
+    <rect class="shp f-stg" x="595" y="100" width="24" height="58" rx="5"/><rect class="shp f-stg" x="627" y="86" width="24" height="72" rx="5"/><rect class="shp f-stg" x="659" y="112" width="24" height="46" rx="5"/>
+    <text class="lbl" x="580" y="195">${T('H₂SO₄ · H₂O₂ · HF · IPA','硫酸·双氧水·HF·IPA')}</text>
+  </g>
+  <g class="gx" data-k="m1">
+    <rect class="shp f-stg" x="730" y="105" width="56" height="30" rx="14"/>
+    <line x1="714" y1="120" x2="730" y2="120" stroke="#44537a"/><line x1="786" y1="120" x2="804" y2="120" stroke="#44537a"/>
+    <text class="lbl-s" x="716" y="160">${T('POU filter','使用点过滤器')}</text>
+  </g>
+  <g class="gx" data-k="m2">
+    <rect class="shp f-stg" x="836" y="85" width="100" height="70" rx="9"/>
+    <path d="M848,110 q12,-10 24,0 t24,0 t24,0" fill="none" stroke="rgba(124,196,255,.8)" stroke-width="2"/>
+    <path d="M848,128 q12,-10 24,0 t24,0 t24,0" fill="none" stroke="rgba(124,196,255,.8)" stroke-width="2"/>
+    <text class="lbl" x="830" y="190">${T('Ultrapure water','超纯水')}</text>
+  </g>
+</svg>`,
+implant: ()=>`<svg viewBox="0 0 960 250" xmlns="http://www.w3.org/2000/svg">
+  <g class="gx" data-k="e0">
+    <rect class="shp f-inf" x="70" y="85" width="80" height="70" rx="8"/>
+    <text class="lbl-s" x="78" y="125">${T('ion source','离子源')}</text>
+    <path class="shp f-inf" d="M150,108 h60 q40,0 52,-36 l10,-28" fill="none" style="stroke-width:14" stroke-linecap="round"/>
+    <text class="lbl-s" x="200" y="160">${T('analyzer magnet','分析磁铁')}</text>
+    <rect class="shp f-inf" x="300" y="30" width="34" height="44" rx="6"/><rect class="shp f-inf" x="344" y="30" width="34" height="44" rx="6"/><rect class="shp f-inf" x="388" y="30" width="34" height="44" rx="6"/><rect class="shp f-inf" x="432" y="30" width="34" height="44" rx="6"/>
+    <text class="lbl-s" x="312" y="92">${T('acceleration column','加速柱')}</text>
+    <line x1="276" y1="52" x2="540" y2="52" stroke="#ff8787" stroke-dasharray="5 5" stroke-width="2"/>
+    <rect x="540" y="20" width="10" height="80" rx="3" transform="rotate(12 545 60)" fill="#cfd8ea"/>
+    <text class="lbl-s" x="560" y="44">${T('wafer (tilted)','晶圆（倾斜）')}</text>
+    <text class="lbl" x="200" y="225">${T('Ion implanter beamline','离子注入机束线')}</text>
+  </g>
+  <g class="gx" data-k="m0">
+    <rect class="shp f-stg" x="700" y="60" width="150" height="130" rx="10"/>
+    <rect x="722" y="86" width="22" height="74" rx="7" fill="#0e1f17" stroke="#2d5444"/><rect x="756" y="86" width="22" height="74" rx="7" fill="#0e1f17" stroke="#2d5444"/><rect x="790" y="86" width="22" height="74" rx="7" fill="#0e1f17" stroke="#2d5444"/>
+    <text class="lbl-s" x="722" y="80">BF₃</text><text class="lbl-s" x="756" y="80">PH₃</text><text class="lbl-s" x="790" y="80">AsH₃</text>
+    <path d="M700,125 h-90 v-15" fill="none" stroke="#44537a" stroke-dasharray="4 5"/>
+    <text class="lbl" x="688" y="218">${T('Dopant gas cabinet (SDS)','掺杂气柜（安全钢瓶）')}</text>
+  </g>
+</svg>`,
+depo: ()=>`<svg viewBox="0 0 960 250" xmlns="http://www.w3.org/2000/svg">
+  <g class="gx" data-k="e0">
+    <rect class="shp f-inf" x="40" y="30" width="160" height="125" rx="9"/>
+    <rect x="56" y="44" width="128" height="11" rx="4" fill="#1b2a4a" stroke="#2c4271"/>
+    <line x1="78" y1="112" x2="162" y2="112" stroke="#cfd8ea" stroke-width="4"/>
+    <line x1="78" y1="107" x2="162" y2="107" stroke="rgba(56,217,169,.95)" stroke-width="3"/>
+    <text class="lbl" x="56" y="180">CVD / PECVD</text>
+  </g>
+  <g class="gx" data-k="e1">
+    <rect class="shp f-inf" x="250" y="30" width="160" height="125" rx="9"/>
+    <circle cx="290" cy="62" r="5" fill="#7cc4ff"/><circle cx="312" cy="62" r="5" fill="#38d9a9"/><circle cx="334" cy="62" r="5" fill="#7cc4ff"/><circle cx="356" cy="62" r="5" fill="#38d9a9"/>
+    <text class="lbl-s" x="288" y="50">A·B·A·B</text>
+    <line x1="288" y1="112" x2="372" y2="112" stroke="#cfd8ea" stroke-width="4"/>
+    <text class="lbl" x="290" y="180">ALD</text>
+  </g>
+  <g class="gx" data-k="e2">
+    <path class="shp f-inf" d="M470,95 a55,42 0 0 1 110,0 v60 h-110 z"/>
+    <circle cx="500" cy="72" r="5" fill="rgba(255,169,77,.9)"/><circle cx="525" cy="64" r="5" fill="rgba(255,169,77,.9)"/><circle cx="550" cy="72" r="5" fill="rgba(255,169,77,.9)"/>
+    <line x1="495" y1="135" x2="555" y2="135" stroke="#cfd8ea" stroke-width="4"/>
+    <text class="lbl" x="468" y="180">${T('Epitaxy (SiGe)','外延（SiGe）')}</text>
+  </g>
+  <g class="gx" data-k="e3">
+    <rect class="shp f-inf" x="650" y="30" width="160" height="125" rx="9"/>
+    <circle cx="700" cy="86" r="2.5" fill="#9db8e8"/><circle cx="722" cy="96" r="2.5" fill="#9db8e8"/><circle cx="744" cy="84" r="2.5" fill="#9db8e8"/><circle cx="762" cy="98" r="2.5" fill="#9db8e8"/>
+    <line x1="688" y1="118" x2="772" y2="118" stroke="#cfd8ea" stroke-width="4"/>
+    <text class="lbl" x="668" y="180">${T('PVD / sputter','PVD 溅射')}</text>
+  </g>
+  <g class="gx" data-k="m2">
+    <rect class="shp f-stg" x="672" y="44" width="116" height="12" rx="4"/>
+    <text class="lbl-s" x="820" y="56">${T('← target','← 靶材')}</text>
+  </g>
+  <g class="gx" data-k="m0">
+    <path class="shp f-stg" d="M280,205 a14,14 0 1 0 0.1,0 z M272,196 h16 v-10 h-16 z"/>
+    <path class="shp f-stg" d="M330,205 a14,14 0 1 0 0.1,0 z M322,196 h16 v-10 h-16 z"/>
+    <line x1="305" y1="190" x2="305" y2="155" stroke="#44537a" stroke-dasharray="4 4"/>
+    <text class="lbl" x="360" y="216">${T('Precursor ampoules (TEOS, HCDS, Hf…)','前驱体安瓿（TEOS、HCDS、铪源等）')}</text>
+  </g>
+  <g class="gx" data-k="m1">
+    <rect class="shp f-stg" x="92" y="195" width="24" height="48" rx="7"/>
+    <line x1="104" y1="195" x2="104" y2="155" stroke="#44537a" stroke-dasharray="4 4"/>
+    <text class="lbl-s" x="126" y="225">SiH₄ · NH₃ · N₂O</text>
+  </g>
+</svg>`,
+cmp: ()=>`<svg viewBox="0 0 960 250" xmlns="http://www.w3.org/2000/svg">
+  <g class="gx" data-k="e0">
+    <rect class="shp f-inf" x="140" y="155" width="330" height="26" rx="6"/>
+    <rect class="shp f-inf" x="250" y="55" width="90" height="55" rx="8"/>
+    <rect x="288" y="35" width="14" height="20" fill="#1b2a4a" stroke="#2c4271"/>
+    <line x1="258" y1="118" x2="332" y2="118" stroke="#cfd8ea" stroke-width="5"/>
+    <path d="M120,168 a18,12 0 0 1 0,0" fill="none"/>
+    <text class="lbl" x="150" y="225">${T('CMP polisher — head presses wafer onto rotating pad','CMP 抛光机 — 抛光头将晶圆压在旋转抛光垫上')}</text>
+  </g>
+  <g class="gx" data-k="m1">
+    <rect class="shp f-stg" x="140" y="147" width="330" height="8" rx="3"/>
+    <text class="lbl-s" x="92" y="153">${T('pad →','抛光垫 →')}</text>
+  </g>
+  <g class="gx" data-k="m0">
+    <rect class="shp f-stg" x="372" y="62" width="22" height="34" rx="5" transform="rotate(18 383 79)"/>
+    <line x1="392" y1="100" x2="400" y2="140" stroke="rgba(56,217,169,.9)" stroke-dasharray="2 4" stroke-width="2"/>
+    <text class="lbl-s" x="404" y="86">${T('slurry','研磨液')}</text>
+  </g>
+  <g class="gx" data-k="m2">
+    <line x1="500" y1="80" x2="452" y2="140" stroke="#2d5444" stroke-width="4"/>
+    <circle class="shp f-stg" cx="448" cy="144" r="11"/>
+    <text class="lbl-s" x="506" y="78">${T('diamond conditioner','金刚石修整盘')}</text>
+  </g>
+  <g class="gx" data-k="m3">
+    <circle class="shp f-stg" cx="640" cy="120" r="20"/>
+    <circle class="shp f-stg" cx="700" cy="120" r="20"/>
+    <line x1="668" y1="80" x2="668" y2="160" stroke="#cfd8ea" stroke-width="3"/>
+    <text class="lbl" x="600" y="190">${T('Post-CMP brush clean','CMP 后刷洗')}</text>
+  </g>
+</svg>`,
+metro: ()=>`<svg viewBox="0 0 960 250" xmlns="http://www.w3.org/2000/svg">
+  <g class="gx" data-k="e0">
+    <rect class="shp f-inf" x="55" y="35" width="170" height="80" rx="9"/>
+    <path d="M140,115 L110,165 h60 z" fill="rgba(124,196,255,.18)" stroke="rgba(124,196,255,.5)"/>
+    <ellipse cx="140" cy="172" rx="48" ry="10" fill="#cfd8ea" opacity=".9"/>
+    <text class="lbl" x="44" y="215">${T('Optical / e-beam inspection','光学/电子束缺陷检测')}</text>
+  </g>
+  <g class="gx" data-k="e1">
+    <path class="shp f-inf" d="M330,35 h56 l10,40 h-76 z"/>
+    <path class="shp f-inf" d="M340,75 h36 l8,34 h-52 z"/>
+    <line x1="358" y1="109" x2="358" y2="150" stroke="#7cc4ff" stroke-dasharray="2 4"/>
+    <ellipse cx="358" cy="158" rx="42" ry="9" fill="#cfd8ea" opacity=".9"/>
+    <text class="lbl" x="300" y="215">${T('CD-SEM / OCD','CD-SEM / OCD 散射量测')}</text>
+  </g>
+  <g class="gx" data-k="e2">
+    <rect class="shp f-inf" x="490" y="50" width="140" height="110" rx="9"/>
+    <rect x="535" y="80" width="50" height="50" fill="none" stroke="#9db8e8" stroke-width="2"/>
+    <rect x="547" y="92" width="26" height="26" fill="none" stroke="#9db8e8" stroke-width="2"/>
+    <text class="lbl" x="488" y="215">${T('Overlay metrology','套刻量测')}</text>
+  </g>
+  <g class="gx" data-k="e3">
+    <rect class="shp f-inf" x="690" y="55" width="120" height="100" rx="9"/>
+    <path d="M710,95 l40,14 l-12,10 z" fill="#9db8e8"/>
+    <line x1="706" y1="130" x2="794" y2="130" stroke="#cfd8ea" stroke-width="3"/>
+    <text class="lbl" x="680" y="215">${T('AFM / X-ray / TEM lab','AFM/X 射线/TEM 实验室')}</text>
+  </g>
+  <g class="gx" data-k="m0">
+    <ellipse class="shp" cx="890" cy="120" rx="36" ry="9" fill="#cfd8ea" stroke="#9fb0cf"/>
+    <ellipse class="shp" cx="890" cy="106" rx="36" ry="9" fill="#cfd8ea" stroke="#9fb0cf"/>
+    <ellipse class="shp" cx="890" cy="92" rx="36" ry="9" fill="#cfd8ea" stroke="#9fb0cf"/>
+    <text class="lbl" x="852" y="165">${T('Monitor wafers','监控片')}</text>
+  </g>
+</svg>`,
+beol: ()=>`<svg viewBox="0 0 960 250" xmlns="http://www.w3.org/2000/svg">
+  <g class="gx" data-k="m1">
+    <rect class="shp f-stg" x="40" y="50" width="220" height="32"/>
+    <rect class="shp f-stg" x="40" y="98" width="220" height="32"/>
+    <rect class="shp f-stg" x="40" y="146" width="220" height="32"/>
+    <text class="lbl-s" x="42" y="42">${T('low-k dielectric layers','低 k 介质层')}</text>
+  </g>
+  <rect x="60" y="56" width="60" height="12" fill="rgba(255,169,77,.75)"/><rect x="150" y="56" width="90" height="12" fill="rgba(255,169,77,.75)"/>
+  <rect x="90" y="68" width="12" height="30" fill="rgba(255,169,77,.75)"/><rect x="190" y="68" width="12" height="30" fill="rgba(255,169,77,.75)"/>
+  <rect x="60" y="104" width="110" height="12" fill="rgba(255,169,77,.75)"/><rect x="200" y="104" width="40" height="12" fill="rgba(255,169,77,.75)"/>
+  <rect x="130" y="116" width="12" height="30" fill="rgba(255,169,77,.75)"/>
+  <rect x="60" y="152" width="180" height="12" fill="rgba(255,169,77,.75)"/>
+  <text class="lbl" x="40" y="215">${T('Cu damascene stack (15–18 layers)','铜大马士革叠层（15–18 层）')}</text>
+  <g class="gx" data-k="e0">
+    <rect class="shp f-inf" x="340" y="60" width="220" height="130" rx="10"/>
+    <rect x="396" y="74" width="108" height="14" rx="4" fill="#cfd8ea"/>
+    <circle cx="380" cy="150" r="3" fill="#7cc4ff"/><circle cx="420" cy="160" r="3" fill="#7cc4ff"/><circle cx="470" cy="152" r="3" fill="#7cc4ff"/><circle cx="510" cy="162" r="3" fill="#7cc4ff"/>
+    <text class="lbl" x="345" y="218">${T('ECD copper plating cell','铜电镀（ECD）槽')}</text>
+  </g>
+  <g class="gx" data-k="m0">
+    <rect class="shp f-stg" x="356" y="100" width="188" height="74" rx="6"/>
+    <rect class="shp f-stg" x="396" y="166" width="108" height="10" rx="3"/>
+    <rect class="shp f-stg" x="580" y="100" width="24" height="50" rx="5"/>
+    <text class="lbl-s" x="576" y="170">${T('bath + anode + additives','镀液+阳极+添加剂')}</text>
+  </g>
+  <g class="gx" data-k="e1">
+    <rect class="shp f-inf" x="680" y="70" width="130" height="100" rx="9"/>
+    <rect x="696" y="84" width="98" height="10" rx="3" fill="#1b2a4a" stroke="#2c4271"/>
+    <line x1="712" y1="140" x2="778" y2="140" stroke="#cfd8ea" stroke-width="4"/>
+    <text class="lbl" x="668" y="200">${T('Barrier / seed PVD','阻挡层/种子层 PVD')}</text>
+  </g>
+  <g class="gx" data-k="m2">
+    <path class="shp f-stg" d="M880,120 a15,15 0 1 0 0.1,0 z M871,110 h18 v-12 h-18 z"/>
+    <text class="lbl-s" x="848" y="170">${T('Co / Ru precursors','钴/钌前驱体')}</text>
+  </g>
+</svg>`,
+test: ()=>`<svg viewBox="0 0 960 250" xmlns="http://www.w3.org/2000/svg">
+  <g class="gx" data-k="e0">
+    <rect class="shp f-inf" x="70" y="35" width="140" height="180" rx="10"/>
+    <rect x="84" y="50" width="112" height="22" fill="#101c33" stroke="#2c4271"/><circle cx="184" cy="61" r="3.5" fill="#69db7c"/>
+    <rect x="84" y="82" width="112" height="22" fill="#101c33" stroke="#2c4271"/><circle cx="184" cy="93" r="3.5" fill="#69db7c"/>
+    <rect x="84" y="114" width="112" height="22" fill="#101c33" stroke="#2c4271"/><circle cx="184" cy="125" r="3.5" fill="#69db7c"/>
+    <rect x="84" y="146" width="112" height="22" fill="#101c33" stroke="#2c4271"/><circle cx="184" cy="157" r="3.5" fill="#69db7c"/>
+    <text class="lbl" x="86" y="238">${T('ATE tester','ATE 测试机')}</text>
+  </g>
+  <path d="M210,125 h90" stroke="#44537a" stroke-width="5" fill="none"/>
+  <g class="gx" data-k="e1">
+    <rect class="shp f-inf" x="300" y="45" width="320" height="170" rx="12"/>
+    <ellipse cx="460" cy="170" rx="92" ry="14" fill="#cfd8ea" opacity=".9"/>
+    <rect x="430" y="178" width="60" height="20" fill="#1b2a4a" stroke="#2c4271"/>
+    <text class="lbl" x="306" y="238">${T('Wafer prober — chuck steps each die under the needles','晶圆探针台 — 卡盘逐颗对位')}</text>
+  </g>
+  <g class="gx" data-k="m0">
+    <rect class="shp f-stg" x="390" y="95" width="140" height="16" rx="4"/>
+    <line x1="412" y1="111" x2="412" y2="152" stroke="rgba(56,217,169,.9)" stroke-width="2"/>
+    <line x1="442" y1="111" x2="442" y2="152" stroke="rgba(56,217,169,.9)" stroke-width="2"/>
+    <line x1="472" y1="111" x2="472" y2="152" stroke="rgba(56,217,169,.9)" stroke-width="2"/>
+    <line x1="502" y1="111" x2="502" y2="152" stroke="rgba(56,217,169,.9)" stroke-width="2"/>
+    <text class="lbl-s" x="545" y="108">${T('← probe card + needles','← 探针卡与探针')}</text>
+  </g>
+  <text class="lbl" x="700" y="120">${T('→ known-good-die map','→ 良品裸片（KGD）图')}</text>
+</svg>`,
+pkg: ()=>`<svg viewBox="0 0 960 250" xmlns="http://www.w3.org/2000/svg">
+  <g class="gx" data-k="e0">
+    <circle cx="120" cy="120" r="62" fill="none" stroke="#44537a" stroke-width="3"/>
+    <circle cx="120" cy="120" r="46" fill="#cfd8ea" opacity=".85"/>
+    <line x1="86" y1="100" x2="154" y2="100" stroke="#8b97b4"/><line x1="82" y1="120" x2="158" y2="120" stroke="#8b97b4"/><line x1="86" y1="140" x2="154" y2="140" stroke="#8b97b4"/>
+    <line x1="105" y1="86" x2="105" y2="154" stroke="#8b97b4"/><line x1="125" y1="82" x2="125" y2="158" stroke="#8b97b4"/><line x1="145" y1="90" x2="145" y2="150" stroke="#8b97b4"/>
+    <ellipse class="shp f-inf" cx="120" cy="74" rx="10" ry="22"/>
+    <text class="lbl" x="56" y="218">${T('Back-grind + dicing','减薄与划片')}</text>
+  </g>
+  <g class="gx" data-k="e1">
+    <rect class="shp f-inf" x="280" y="40" width="200" height="20" rx="6"/>
+    <rect class="shp f-inf" x="360" y="60" width="36" height="44" rx="5"/>
+    <rect x="366" y="108" width="24" height="14" fill="#cfd8ea"/>
+    <line x1="378" y1="126" x2="378" y2="150" stroke="#44537a" stroke-dasharray="3 4"/>
+    <text class="lbl" x="282" y="218">${T('Bonder (TCB / hybrid / flip-chip)','键合机（TCB/混合/倒装）')}</text>
+  </g>
+  <g class="gx" data-k="e2">
+    <rect class="shp f-inf" x="530" y="70" width="110" height="90" rx="9"/>
+    <circle cx="585" cy="105" r="22" fill="none" stroke="#9db8e8" stroke-width="2"/>
+    <text class="lbl" x="514" y="218">${T('RDL litho + plating','再布线光刻与电镀')}</text>
+  </g>
+  <g class="gx" data-k="m0">
+    <rect class="shp f-stg" x="300" y="158" width="160" height="16" rx="3"/>
+    <rect class="shp f-stg" x="710" y="160" width="210" height="18" rx="3"/>
+    <text class="lbl-s" x="300" y="192">${T('ABF substrate','ABF 载板')}</text>
+  </g>
+  <g class="gx" data-k="m2">
+    <circle class="shp f-stg" cx="746" cy="154" r="5"/><circle class="shp f-stg" cx="776" cy="154" r="5"/><circle class="shp f-stg" cx="806" cy="154" r="5"/><circle class="shp f-stg" cx="836" cy="154" r="5"/><circle class="shp f-stg" cx="866" cy="154" r="5"/>
+    <text class="lbl-s" x="700" y="208">${T('solder bumps / Cu pillars','焊球/铜柱')}</text>
+  </g>
+  <rect x="760" y="120" width="110" height="28" fill="#cfd8ea" opacity=".9"/>
+  <g class="gx" data-k="m1">
+    <path class="shp f-stg" d="M722,148 v-50 q0,-14 14,-14 h158 q14,0 14,14 v50 z" fill-opacity=".25"/>
+    <text class="lbl-s" x="742" y="76">${T('mold compound cap','塑封料')}</text>
+  </g>
+  <text class="lbl" x="700" y="232">${T('Packaged die (cross-section)','封装剖面')}</text>
+</svg>`,
+ftest: ()=>`<svg viewBox="0 0 960 250" xmlns="http://www.w3.org/2000/svg">
+  <g class="gx" data-k="e0">
+    <rect class="shp f-inf" x="70" y="35" width="140" height="180" rx="10"/>
+    <rect x="84" y="50" width="112" height="24" fill="#101c33" stroke="#2c4271"/><circle cx="184" cy="62" r="3.5" fill="#69db7c"/>
+    <rect x="84" y="84" width="112" height="24" fill="#101c33" stroke="#2c4271"/><circle cx="184" cy="96" r="3.5" fill="#69db7c"/>
+    <rect x="84" y="118" width="112" height="24" fill="#101c33" stroke="#2c4271"/><circle cx="184" cy="130" r="3.5" fill="#69db7c"/>
+    <text class="lbl" x="80" y="238">${T('ATE (final test)','ATE（终测）')}</text>
+  </g>
+  <path d="M210,125 h70" stroke="#44537a" stroke-width="5" fill="none"/>
+  <g class="gx" data-k="e1">
+    <rect class="shp f-inf" x="290" y="50" width="280" height="160" rx="12"/>
+    <rect x="320" y="170" width="220" height="14" fill="#1b2a4a" stroke="#2c4271"/>
+    <rect x="402" y="150" width="56" height="20" rx="4" fill="#16233e" stroke="#7cc4ff"/>
+    <rect x="416" y="112" width="28" height="18" fill="#cfd8ea"/>
+    <line x1="430" y1="130" x2="430" y2="148" stroke="#44537a" stroke-dasharray="3 4"/>
+    <path class="shp f-inf" d="M400,66 h60 v22 h-22 v18 h-16 v-18 h-22 z"/>
+    <text class="lbl" x="300" y="238">${T('Handler places unit into test socket','分选机将芯片放入测试插座')}</text>
+  </g>
+  <g class="gx" data-k="e2">
+    <rect class="shp f-inf" x="650" y="45" width="220" height="165" rx="12"/>
+    <rect x="672" y="70" width="176" height="16" fill="#101c33" stroke="#2c4271"/>
+    <rect x="672" y="100" width="176" height="16" fill="#101c33" stroke="#2c4271"/>
+    <rect x="672" y="130" width="176" height="16" fill="#101c33" stroke="#2c4271"/>
+    <path d="M700,176 q6,-10 0,-20 M740,176 q6,-10 0,-20 M780,176 q6,-10 0,-20 M820,176 q6,-10 0,-20" fill="none" stroke="rgba(255,169,77,.8)" stroke-width="2"/>
+    <text class="lbl" x="660" y="238">${T('Burn-in oven / system-level test','老化炉 / 系统级测试')}</text>
+  </g>
+</svg>`
+};
+
+/* ---- per-stage vendor market shares (est. share of this stage's revenue pool) ---- */
+const PIE_COLORS = ['#7cc4ff','#38d9a9','#ffa94d','#b197fc','#69db7c','#f783ac','#ffd43b','#748ffc','#63e6be','#e599f7','#a9b4cc'];
+const PIES = {
+design:[
+ {t:'Design toolchain (EDA + IP) vendor share', zhT:'设计工具链（EDA+IP）厂商份额', d:[['Synopsys',30,'SNPS'],['Cadence',28,'CDNS'],['Arm',20,'ARM'],['Siemens EDA',12,'ETR: SIE'],['Others',10]]}
+],
+mask:[
+ {t:'Mask-making equipment vendor share', zhT:'掩模制造设备厂商份额', d:[['Lasertec',35,'TYO: 6920'],['IMS (Intel)',25,'INTC'],['NuFlare',15,'Toshiba'],['KLA',12,'KLAC'],['ZEISS SMT',8],['Others',5]]},
+ {t:'Mask materials vendor share', zhT:'掩模材料厂商份额', d:[['Hoya',35,'TYO: 7741'],['AGC',25,'TYO: 5201'],['Mitsui Chemicals',10,'TYO: 4183'],['Corning',8,'GLW'],['Entegris',8,'ENTG'],['Gudeng',6,'TWSE: 3680'],['Others',8]]}
+],
+substrate:[
+ {t:'Wafer-making equipment vendor share', zhT:'硅片制造设备厂商份额', d:[['Applied Materials (epi)',20,'AMAT'],['Grinding/dicing makers',20,'TYO: 7729 · 6146'],['PVA TePla',15,'ETR: TPE'],['Ferrotec',12,'TYO: 6890'],['KLA',10,'KLAC'],['ASM International',8,'AMS: ASM'],['Others',15]]},
+ {t:'300 mm wafer supply share', zhT:'300mm 硅片供应份额', d:[['Shin-Etsu',29,'TYO: 4063'],['SUMCO',23,'TYO: 3436'],['GlobalWafers',17,'TPEx: 6488'],['Siltronic',12,'ETR: WAF'],['SK Siltron',11,'KRX: 034730'],['Others',8]]}
+],
+thermal:[
+ {t:'Thermal equipment vendor share', zhT:'热制程设备厂商份额', d:[['Kokusai Electric',35,'TYO: 6525'],['Tokyo Electron',30,'TYO: 8035'],['Applied Materials',20,'AMAT'],['ASM International',10,'AMS: ASM'],['Screen',3,'TYO: 7735'],['Others',2]]},
+ {t:'Thermal materials vendor share', zhT:'热制程材料厂商份额', d:[['Linde',22,'LIN'],['Air Liquide',18,'EPA: AI'],['Nippon Sanso',12,'TYO: 4091'],['Air Products',10,'APD'],['Tosoh',10,'TYO: 4042'],['Tokai Carbon',8,'TYO: 5301'],['Shin-Etsu Quartz',8],['Others',12]]}
+],
+litho:[
+ {t:'Litho equipment vendor share', zhT:'光刻设备厂商份额', d:[['ASML',72,'ASML'],['Tokyo Electron (track)',14,'TYO: 8035'],['Nikon',6,'TYO: 7731'],['Canon',4,'TYO: 7751'],['Screen (track)',2,'TYO: 7735'],['Others',2]]},
+ {t:'Litho materials vendor share', zhT:'光刻材料厂商份额', d:[['TOK',18,'TYO: 4186'],['JSR (incl. Inpria)',18,'JIC'],['Shin-Etsu',14,'TYO: 4063'],['DNP / Toppan (masks)',12,'TYO: 7912·7911'],['Merck KGaA',8,'ETR: MRK'],['Sumitomo Chemical',8,'TYO: 4005'],['FujiFilm',7,'TYO: 4901'],['Others',15]]}
+],
+etch:[
+ {t:'Etch equipment vendor share', zhT:'刻蚀设备厂商份额', d:[['Lam Research',45,'LRCX'],['Tokyo Electron',26,'TYO: 8035'],['Applied Materials',17,'AMAT'],['Hitachi High-Tech',5,'TYO: 6501'],['PSK (strip)',3,'KOSDAQ: 319660'],['Others',4]]},
+ {t:'Etch gases & consumables vendor share', zhT:'刻蚀气体与耗材厂商份额', d:[['Resonac',15,'TYO: 4004'],['SK Materials',12,'KRX: 034730'],['Tokai Carbon',12,'TYO: 5301'],['Linde',10,'LIN'],['Kanto Denka',8,'TYO: 4047'],['Hana Materials',8,'KOSDAQ: 166090'],['CoorsTek',8],['Ferrotec',7,'TYO: 6890'],['Others',20]]}
+],
+clean:[
+ {t:'Clean equipment vendor share', zhT:'清洗设备厂商份额', d:[['Screen',45,'TYO: 7735'],['Tokyo Electron',22,'TYO: 8035'],['SEMES',14,'Samsung'],['ACM Research',8,'ACMR'],['Lam Research',4,'LRCX'],['Others',7]]},
+ {t:'Clean chemicals & filtration vendor share', zhT:'清洗化学品与过滤厂商份额', d:[['Entegris (filters)',18,'ENTG'],['Mitsubishi Chemical',12,'TYO: 4188'],['Stella Chemifa',10,'TYO: 4109'],['BASF',10,'ETR: BAS'],['Kanto Chemical',8],['FujiFilm',8,'TYO: 4901'],['Pall (Danaher)',8,'DHR'],['Organo',8,'TYO: 6368'],['Kurita',8,'TYO: 6370'],['Others',10]]}
+],
+implant:[
+ {t:'Implant equipment vendor share', zhT:'离子注入设备厂商份额', d:[['Applied Materials (Varian)',70,'AMAT'],['Axcelis',22,'ACLS'],['Nissin Ion / SMIT',5,'TYO: 6641'],['Others',3]]},
+ {t:'Dopant gas vendor share', zhT:'掺杂气体厂商份额', d:[['Entegris (SDS)',45,'ENTG'],['Linde',20,'LIN'],['Resonac',12,'TYO: 4004'],['Nippon Sanso',10,'TYO: 4091'],['Others',13]]}
+],
+depo:[
+ {t:'Deposition equipment vendor share', zhT:'薄膜沉积设备厂商份额', d:[['Applied Materials',38,'AMAT'],['Lam Research',22,'LRCX'],['Tokyo Electron',16,'TYO: 8035'],['ASM International',14,'AMS: ASM'],['Kokusai Electric',5,'TYO: 6525'],['Ulvac',2,'TYO: 6728'],['Others',3]]},
+ {t:'Precursors, gases & targets vendor share', zhT:'前驱体、气体与靶材厂商份额', d:[['Merck KGaA',16,'ETR: MRK'],['Entegris',12,'ENTG'],['JX Advanced Metals',12,'TYO: 5016'],['Air Liquide',10,'EPA: AI'],['Adeka',8,'TYO: 4401'],['Linde',8,'LIN'],['Resonac',8,'TYO: 4004'],['Soulbrain',7,'KOSDAQ: 357780'],['DNF',5,'KOSDAQ: 092070'],['Materion',4,'MTRN'],['Others',10]]}
+],
+cmp:[
+ {t:'CMP equipment vendor share', zhT:'CMP 设备厂商份额', d:[['Applied Materials',68,'AMAT'],['Ebara',28,'TYO: 6361'],['Others',4]]},
+ {t:'CMP consumables vendor share', zhT:'CMP 耗材厂商份额', d:[['Entegris (CMC)',28,'ENTG'],['DuPont (pads)',20,'DD'],['Fujimi',10,'TYO: 5384'],['Resonac',8,'TYO: 4004'],['FujiFilm',7,'TYO: 4901'],['3M',6,'MMM'],['Kinik',5,'TWSE: 1560'],['Others',16]]}
+],
+metro:[
+ {t:'Metrology & inspection vendor share', zhT:'量检测设备厂商份额', d:[['KLA',52,'KLAC'],['Applied Materials',12,'AMAT'],['Hitachi High-Tech',12,'TYO: 6501'],['ASML',8,'ASML'],['Nova',5,'NVMI'],['Onto Innovation',4,'ONTO'],['Others',7]]},
+ {t:'Monitor-wafer supply share', zhT:'监控片供应份额', d:[['SUMCO',30,'TYO: 3436'],['Shin-Etsu',25,'TYO: 4063'],['GlobalWafers',18,'TPEx: 6488'],['RS Technologies (reclaim)',15,'TYO: 3445'],['Others',12]]}
+],
+beol:[
+ {t:'Plating equipment vendor share', zhT:'电镀设备厂商份额', d:[['Lam Research',75,'LRCX'],['Applied Materials',20,'AMAT'],['Others',5]]},
+ {t:'BEOL chemistry vendor share', zhT:'后道互连化学品厂商份额', d:[['MKS (Atotech)',25,'MKSI'],['Element Solutions',20,'ESI'],['JX Advanced Metals',15,'TYO: 5016'],['Merck KGaA',12,'ETR: MRK'],['Furuya Metal',8,'TYO: 7826'],['Ishihara Chemical',8],['Others',12]]}
+],
+test:[
+ {t:'Wafer-test equipment vendor share', zhT:'晶圆测试设备厂商份额', d:[['Advantest',48,'TYO: 6857'],['Teradyne',32,'TER'],['Tokyo Electron (probers)',10,'TYO: 8035'],['Accretech',7,'TYO: 7729'],['Others',3]]},
+ {t:'Probe-card vendor share', zhT:'探针卡厂商份额', d:[['FormFactor',32,'FORM'],['Technoprobe',24,'BIT: TPRO'],['Micronics Japan',15,'TYO: 6871'],['MPI',8,'TPEx: 6223'],['Others',21]]}
+],
+pkg:[
+ {t:'Packaging equipment vendor share', zhT:'封装设备厂商份额', d:[['Disco',30,'TYO: 6146'],['ASMPT',22,'HKG: 0522'],['BE Semiconductor',18,'AMS: BESI'],['Kulicke & Soffa',10,'KLIC'],['Accretech',6,'TYO: 7729'],['EVG / SUSS',6,'ETR: SMHN'],['Others',8]]},
+ {t:'Packaging materials vendor share', zhT:'封装材料厂商份额', d:[['Ibiden',22,'TYO: 4062'],['Shinko Electric',16,'TYO: 6967'],['Unimicron',14,'TWSE: 3037'],['Ajinomoto (ABF film)',10,'TYO: 2802'],['AT&S',8,'VIE: ATS'],['Resonac',8,'TYO: 4004'],['Nan Ya PCB',7,'TWSE: 8046'],['Sumitomo Bakelite',5,'TYO: 4203'],['Others',10]]}
+],
+ftest:[
+ {t:'Final-test equipment vendor share', zhT:'终测设备厂商份额', d:[['Advantest',45,'TYO: 6857'],['Teradyne',30,'TER'],['Cohu',10,'COHU'],['ISC / Leeno (sockets)',7,'KOSDAQ'],['Aehr',3,'AEHR'],['Others',5]]}
+]
+};
+function donutArc(cx,cy,r,ir,a0,a1){
+  const rad = d=>d*Math.PI/180;
+  const x0=cx+r*Math.cos(rad(a0)), y0=cy+r*Math.sin(rad(a0));
+  const x1=cx+r*Math.cos(rad(a1)), y1=cy+r*Math.sin(rad(a1));
+  const xi1=cx+ir*Math.cos(rad(a1)), yi1=cy+ir*Math.sin(rad(a1));
+  const xi0=cx+ir*Math.cos(rad(a0)), yi0=cy+ir*Math.sin(rad(a0));
+  const lg=(a1-a0)>180?1:0;
+  return 'M'+x0.toFixed(2)+','+y0.toFixed(2)+' A'+r+','+r+' 0 '+lg+' 1 '+x1.toFixed(2)+','+y1.toFixed(2)
+       +' L'+xi1.toFixed(2)+','+yi1.toFixed(2)+' A'+ir+','+ir+' 0 '+lg+' 0 '+xi0.toFixed(2)+','+yi0.toFixed(2)+' Z';
+}
+function pieCard(p){
+  const card = document.createElement('div'); card.className='pie-card';
+  const total = p.d.reduce((a,x)=>a+x[1],0);
+  const cx=80, cy=80, r=72, ir=42;
+  let a0=-90, paths='', labels='';
+  p.d.forEach((x,i)=>{
+    const a1 = a0 + x[1]/total*360 - 0.3;
+    const col = x[0]==='Others' ? '#5d6a86' : PIE_COLORS[i % PIE_COLORS.length];
+    paths += '<path class="pslice" data-i="'+i+'" d="'+donutArc(cx,cy,r,ir,a0,a1)+'" fill="'+col+'"><title>'+x[0]+' — '+x[1]+'% ('+T('est.','估算')+')</title></path>';
+    if(x[1]>=8){
+      const am=(a0+a1)/2*Math.PI/180, lr=(r+ir)/2;
+      labels += '<text x="'+(cx+lr*Math.cos(am)).toFixed(1)+'" y="'+(cy+lr*Math.sin(am)+3.5).toFixed(1)+'" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0b1020">'+x[1]+'</text>';
+    }
+    a0 = a1 + 0.3;
+  });
+  const leg = p.d.map((x,i)=>{
+    const col = x[0]==='Others' ? '#5d6a86' : PIE_COLORS[i % PIE_COLORS.length];
+    return '<div class="prow" data-i="'+i+'"><i style="background:'+col+'"></i><span class="pn">'+(x[0]==='Others'?T('Others','其他'):x[0])+'</span><span class="pv">'+x[1]+'%</span>'+(x[2]?'<span class="tk">'+x[2]+'</span>':'')+'</div>';
+  }).join('');
+  card.innerHTML = '<div class="pie-t">'+T(p.t,p.zhT)+' · '+T('est.','估算')+'</div>'
+    +'<div class="pie-wrap"><svg viewBox="0 0 160 160" width="160" height="160">'+paths+labels+'</svg><div class="pleg">'+leg+'</div></div>';
+  card.querySelectorAll('.prow').forEach(rw=>{
+    rw.addEventListener('mouseenter', ()=>{ const s=card.querySelector('.pslice[data-i="'+rw.dataset.i+'"]'); if(s) s.classList.add('hot'); });
+    rw.addEventListener('mouseleave', ()=>{ card.querySelectorAll('.pslice.hot').forEach(s=>s.classList.remove('hot')); });
+  });
+  return card;
+}
+
+let stageId = STAGES[0].id;
+let activeProc = null;
+
+function renderStageList(){
+  const el = document.getElementById('stageList'); el.innerHTML='';
+  STAGES.forEach((s,i)=>{
+    const b = document.createElement('button'); b.className = 'stagebtn'+(s.id===stageId?' on':'');
+    b.innerHTML = '<span class="num">'+String(i+1).padStart(2,'0')+'</span><span class="sn">'+T(s.n,s.zh)+'</span><span class="stg">'+T(s.tag,s.zhTag)+'</span>';
+    b.addEventListener('click', e=>{ e.stopPropagation(); if(pinned) unpin(); stageId = s.id; renderStageList(); renderProcess(); });
+    el.appendChild(b);
+  });
+}
+function bindProcNode(el, st, it, kind){
+  el.addEventListener('mouseenter', e=>{ if(!pinned){ setActiveProc(el,st,it,kind); positionTip(e.clientX,e.clientY);} });
+  el.addEventListener('mousemove', e=>{ if(!pinned) positionTip(e.clientX,e.clientY); });
+  el.addEventListener('mouseleave', ()=>{ if(!pinned) clearActive(); });
+  el.addEventListener('click', e=>{
+    e.stopPropagation();
+    if(pinned && activeProc && activeProc.el===el){ unpin(); return; }
+    pinned = true; tip.classList.add('pinned');
+    setActiveProc(el,st,it,kind); positionTip(e.clientX,e.clientY);
+  });
+}
+function setActiveProc(el, st, it, kind){
+  activeId = null; activeProc = {el,st,it,kind};
+  document.querySelectorAll('.active').forEach(x=>x.classList.remove('active'));
+  const k = el.dataset.k;
+  if(k){ document.querySelectorAll('#procMain [data-k="'+k+'"]').forEach(x=>x.classList.add('active')); }
+  else el.classList.add('active');
+  const gs = document.querySelector('#gfxBox svg');
+  if(gs) gs.classList.toggle('gdim', !!gs.querySelector('.gx.active'));
+  buildProcTip(st,it,kind);
+  tip.classList.add('show');
+}
+function buildProcTip(st, it, kind){
+  document.getElementById('tipGrp').textContent = T(st.n,st.zh)+' · '+(kind==='eq'?T('Equipment','设备'):T('Material','材料'));
+  document.getElementById('tipGrp').style.color = kind==='eq' ? '#7cc4ff' : '#38d9a9';
+  document.getElementById('tipName').textContent = T(it.n,it.zh);
+  document.getElementById('tipPct').textContent = (/^\$/.test(it.w)?'≈ ':'')+it.w+(/^\$/.test(it.w)?T(' / wafer',' / 片'):'');
+  document.getElementById('tipRng').textContent = T(WK[it.wk][0], WK[it.wk][1]);
+  const V = (it.v||[]).map(v=>({n:v.n, t:T(v.t, v.zhT||v.t), r:T(v.r||'', v.zhR||v.r||'')}));
+  let h = '<div class="tip-desc">'+T(it.d,it.zhD)+'</div>';
+  if(V.length) h += '<div class="tip-h">'+T('Who makes it','供应商（含上市代码）')+'</div><ul class="vlist">'+V.map(li).join('')+'</ul>';
+  if(it.note) h += '<div class="note"><b>'+T('Investor note:','投资者要点：')+'</b> '+T(it.note,it.zhNote||it.note)+'</div>';
+  h += '<div class="tip-h">'+T('How to read the $ figure','金额口径')+'</div><div style="font-size:11px;color:#8b97b4">'
+     + T('Directional estimate for a leading-edge logic (3 nm-class) 300 mm wafer, foundry ASP ≈ $18–20k. Equipment = implied depreciation per wafer; materials = direct spend. Varies with node, product and loading.',
+         '以 3nm 级先进逻辑 300mm 晶圆为基准（代工均价约 $18–20k）的方向性估算。设备为每片隐含折旧；材料为直接支出。随节点、产品与稼动率变化。')+'</div>';
+  document.getElementById('tipBody').innerHTML = h;
+}
+function renderProcess(){
+  const st = STAGES.find(x=>x.id===stageId);
+  const mini = document.getElementById('procMini');
+  mini.innerHTML = '';
+  STAGES.forEach((x,i)=>{
+    if(i>0){ const a=document.createElement('span'); a.className='marrow'; a.textContent='→'; mini.appendChild(a); }
+    const m = document.createElement('span'); m.className='mini'+(x.id===stageId?' on':'');
+    m.textContent = (i+1)+'. '+T(x.short,x.zhShort);
+    m.addEventListener('click', e=>{ e.stopPropagation(); if(pinned) unpin(); stageId=x.id; renderStageList(); renderProcess(); });
+    mini.appendChild(m);
+  });
+  document.getElementById('procTitle').innerHTML = T(st.n,st.zh)+'<span class="ptag">'+T(st.tag,st.zhTag)+'</span>';
+  document.getElementById('procDesc').textContent = T(st.d,st.zhD);
+  document.getElementById('procTotals').innerHTML = '<span class="chip">'+T(st.tot,st.zhTot)+'</span>';
+  document.getElementById('flowSteps').innerHTML = st.steps.map(s=>'<span class="fstep">'+T(s[0],s[1])+'</span>').join('<span class="farrow">→</span>');
+  const gb = document.getElementById('gfxBox');
+  gb.innerHTML = GFX[st.id] ? GFX[st.id]() : '';
+  document.getElementById('laneGfx').style.display = gb.innerHTML ? '' : 'none';
+  gb.querySelectorAll('.gx').forEach(g=>{
+    const k = g.dataset.k, kind = k.charAt(0)==='e' ? 'eq' : 'mat';
+    const it = (kind==='eq' ? st.eq : st.mat)[+k.slice(1)];
+    if(it) bindProcNode(g, st, it, kind); else g.style.display='none';
+  });
+  const ne = document.getElementById('nodesEq'); ne.innerHTML='';
+  st.eq.forEach((it,i)=>{
+    const b = document.createElement('button'); b.className='pnode'; b.dataset.k = 'e'+i;
+    b.innerHTML = T(it.n,it.zh)+'<span class="pw">'+it.w+'</span>';
+    ne.appendChild(b); bindProcNode(b, st, it, 'eq');
+  });
+  document.getElementById('laneEq').style.display = st.eq.length ? '' : 'none';
+  const nm = document.getElementById('nodesMat'); nm.innerHTML='';
+  st.mat.forEach((it,i)=>{
+    const b = document.createElement('button'); b.className='pnode matn'; b.dataset.k = 'm'+i;
+    b.innerHTML = T(it.n,it.zh)+'<span class="pw">'+it.w+'</span>';
+    nm.appendChild(b); bindProcNode(b, st, it, 'mat');
+  });
+  document.getElementById('laneMat').style.display = st.mat.length ? '' : 'none';
+  const pb = document.getElementById('pieBox'); pb.innerHTML='';
+  (PIES[st.id]||[]).forEach(p=>pb.appendChild(pieCard(p)));
+  document.getElementById('lanePie').style.display = (PIES[st.id]||[]).length ? '' : 'none';
+}
+
+/* ---------- view switch ---------- */
+function setView(v){
+  document.body.dataset.view = v;
+  document.querySelectorAll('#viewTabs button').forEach(b=>b.classList.toggle('on', b.dataset.view===v));
+  if(pinned) unpin(); else clearActive();
+}
+document.querySelectorAll('#viewTabs button').forEach(b=>{
+  b.addEventListener('click', e=>{ e.stopPropagation(); setView(b.dataset.view); });
+});
+
+/* ---------- price toggle ---------- */
+function refreshPrice(){
+  document.getElementById('hintPrice').textContent = T('Basis: ','计价基准：')+priceLabel()+' ≈ €'+PRICES[priceKey].eur+'M';
+  if(activeId) buildTip(activeId);
+}
+document.querySelectorAll('#priceToggle button').forEach(b=>{
+  b.addEventListener('click', e=>{
+    e.stopPropagation();
+    priceKey = b.dataset.price;
+    document.querySelectorAll('#priceToggle button').forEach(x=>x.classList.toggle('on', x===b));
+    refreshShares();
+    refreshPrice();
+  });
+});
+
+/* ---------- language switch ---------- */
+function setLang(l){
+  lang = l;
+  document.documentElement.lang = l==='zh' ? 'zh-CN' : 'en';
+  document.title = T('EUV Lithography System Explorer — Supply Chain & Value Map','EUV 光刻系统全景解析 — 供应链与价值图谱');
+  document.querySelectorAll('[data-zh]').forEach(el=>{
+    if(el.dataset.en===undefined) el.dataset.en = el.innerHTML;
+    el.innerHTML = l==='zh' ? el.dataset.zh : el.dataset.en;
+  });
+  svg.querySelectorAll('text').forEach(t=>{
+    if(t.dataset.en===undefined) t.dataset.en = t.textContent;
+    t.textContent = (l==='zh' && SVG_ZH[t.dataset.en]!==undefined) ? SVG_ZH[t.dataset.en] : t.dataset.en;
+  });
+  document.getElementById('langBtn').textContent = l==='zh' ? 'EN · English' : '中文';
+  renderNav();
+  renderStageList();
+  renderProcess();
+  refreshPrice();
+  if(activeId) buildTip(activeId);
+  else if(activeProc && pinned) unpin();
+  try{ localStorage.setItem('euvLang', l); }catch(e){}
+}
+document.getElementById('langBtn').addEventListener('click', e=>{
+  e.stopPropagation();
+  setLang(lang==='en' ? 'zh' : 'en');
+});
+let savedLang = 'en';
+try{ savedLang = localStorage.getItem('euvLang')==='zh' ? 'zh' : 'en'; }catch(e){}
+setLang(savedLang);
+</script>
+</body>
+</html>
