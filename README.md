@@ -1,6 +1,6 @@
 # GoSemi — Semiconductor Supply-Chain Explorer
 
-A single-page interactive explorer for semiconductor investors and analysts, served at **[gosemi.com](https://gosemi.com)**.
+A single-page interactive explorer for semiconductor investors and analysts, served at **[gosemi.app](https://gosemi.app)**.
 
 Two views, fully bilingual (English / 简体中文):
 
