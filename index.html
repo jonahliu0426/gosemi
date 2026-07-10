@@ -128,8 +128,8 @@
   #viewTabs button:hover{color:var(--ink);}
   #viewTabs button.on{background:var(--panel); border-color:var(--line); color:var(--accent); font-weight:600;}
   body[data-view="euv"] #procMain{display:none;}
-  body[data-view="process"] #euvMain{display:none;}
-  body[data-view="process"] .price-toggle{visibility:hidden;}
+  body[data-view="process"] #euvMain, body[data-view="hbm"] #euvMain{display:none;}
+  body[data-view="process"] .price-toggle, body[data-view="hbm"] .price-toggle{visibility:hidden;}
 
   /* ---------- process view ---------- */
   .stagebtn{display:flex; align-items:center; gap:9px; width:100%; text-align:left; background:transparent; border:1px solid transparent; border-radius:9px; padding:7px 9px; color:var(--ink); font:inherit; font-size:12.5px; cursor:pointer; margin-bottom:2px;}
@@ -207,6 +207,7 @@
 <div id="viewTabs">
   <button data-view="euv" class="on" data-zh="EUV 光刻机整机解析">EUV Machine Explorer</button>
   <button data-view="process" data-zh="芯片制造全流程 · 材料与设备">Chip-Making Process Flow · Materials &amp; Equipment</button>
+  <button data-view="hbm" data-zh="HBM（高带宽内存）制造全流程">HBM Manufacturing Flow</button>
 </div>
 
 <main id="euvMain">
@@ -445,7 +446,7 @@
         <div class="pie-note" data-zh="份额为该阶段收入池的方向性估算（设备按折旧额加权、材料按支出额加权），综合公开市场研究；具体细分产品的份额见上方各部件的悬停窗口。">Directional estimates of each company&rsquo;s share of this stage&rsquo;s revenue pool (tools weighted by depreciation $, materials by spend $), compiled from public market research. Product-level shares appear in the hover panels above.</div>
       </div>
     </div>
-    <div class="proc-basis" data-zh="口径：以先进逻辑（3nm 级）300mm 晶圆为基准，代工均价约 $18–20k/片。材料金额 = 每片直接耗材支出；设备金额 = 每片隐含设备折旧（先进制程合计约 $5–7k/片）。所有数字为方向性分析师估算，随节点、产品与产能利用率变化；不构成投资建议。">Basis: leading-edge logic (3 nm-class) 300 mm wafer, foundry ASP ≈ $18–20k. Material $ = direct consumable spend per wafer; equipment $ = implied tool depreciation per wafer (≈$5–7k total at the leading edge). All figures are directional analyst estimates that vary with node, product and fab loading; not investment advice.</div>
+    <div class="proc-basis" id="procBasis"></div>
   </section>
 </main>
 
@@ -2440,15 +2441,619 @@ function pieCard(p){
   return card;
 }
 
-let stageId = STAGES[0].id;
+/* ================= HBM MANUFACTURING FLOW ================= */
+const WKH = {
+  dep:  ['implied tool depreciation per HBM stack','每颗 HBM 堆栈的隐含设备折旧'],
+  mat:  ['direct material spend per HBM stack','每颗 HBM 堆栈的直接材料支出'],
+  amort:['amortized per stack over product volume','按产量摊销到每颗堆栈'],
+  ind:  ['indirect / internal cost share per stack','每颗堆栈的间接/内部成本份额'],
+  emb:  ['embedded in the upstream die/component price','已含于上游裸片/部件价格']
+};
+
+const HBM_STAGES = [
+{ id:'dram', n:'DRAM Core-Die Wafer Fabrication', zh:'DRAM 核心裸片晶圆制造', short:'DRAM fab', zhShort:'DRAM 前道', tag:'DRAM front-end', zhTag:'DRAM 前道',
+  d:'HBM starts as 1β/1γ-node DRAM wafers — 8 to 16 of these core dies get stacked per cube. The signature steps: capacitor cells etched at >40:1 aspect ratios, ZrO₂-class high-k dielectrics by ALD, and (since the 1α/1β generations) a handful of EUV layers. HBM core dies are ~1.5–2× larger than equivalent DDR5 dies because of TSV area and wider I/O — one reason HBM eats ~3× the wafer capacity per bit.',
+  zhD:'HBM 的起点是 1β/1γ 节点的 DRAM 晶圆——每颗立方体要堆 8 至 16 颗核心裸片。标志性工序：深宽比超 40:1 的电容单元刻蚀、ALD 沉积的 ZrO₂ 类高 k 介质，以及（自 1α/1β 代起）少量 EUV 层。因 TSV 面积与更宽 I/O，HBM 核心裸片面积约为同代 DDR5 的 1.5–2 倍——这是 HBM 每 bit 消耗约 3 倍晶圆产能的原因之一。',
+  tot:'Core dies ≈$120–180 of a finished 12-Hi stack (est., yield-burdened)', zhTot:'核心裸片约占一颗 12 层成品堆栈成本 $120–180（估算、含良率负担）',
+  steps:[['Capacitor etch','电容刻蚀'],['High-k ALD','高 k ALD'],['EUV/DUV litho','EUV/DUV 光刻'],['Interconnect','互连'],['Wafer test','晶圆测试']],
+  eq:[
+    {n:'High-aspect-ratio capacitor etch', zh:'高深宽比电容刻蚀', w:'$30–50', wk:'dep',
+     d:'The defining DRAM tool: etching billions of >40:1 capacitor holes per wafer. TEL and Lam dominate this application.',
+     zhD:'DRAM 的标志性设备：每片晶圆刻出数十亿个深宽比超 40:1 的电容孔。东京电子与 Lam 主导该应用。',
+     v:[{n:'Tokyo Electron', t:'TYO: 8035'},{n:'Lam Research', t:'NASDAQ: LRCX'},{n:'Applied Materials', t:'NASDAQ: AMAT'}]},
+    {n:'ALD for capacitor high-k stacks', zh:'电容高 k 介质 ALD', w:'$20–35', wk:'dep',
+     d:'ZrO₂/Al₂O₃ laminates deposited one atomic layer at a time inside those holes; Korean ALD makers ride their memory-fab proximity.',
+     zhD:'在电容孔内逐原子层沉积 ZrO₂/Al₂O₃ 叠层；韩系 ALD 厂商凭借贴近存储厂的优势分羹。',
+     v:[{n:'ASM International', t:'AMS: ASM'},{n:'Tokyo Electron', t:'TYO: 8035'},{n:'Kokusai Electric', t:'TYO: 6525'},{n:'Jusung Engineering', t:'KOSDAQ: 036930', r:'Korean memory-fab ALD', zhR:'韩国存储厂 ALD 供应商'}]},
+    {n:'EUV / DUV lithography', zh:'EUV/DUV 光刻', w:'$15–30', wk:'dep',
+     d:'DRAM adopted EUV from the 1α/1β generations (a few layers, growing each node). See the EUV Machine tab for the tool itself.',
+     zhD:'DRAM 自 1α/1β 代起导入 EUV（每代层数递增）。设备本身见 EUV 光刻机标签页。',
+     v:[{n:'ASML', t:'NASDAQ/AMS: ASML', r:'monopoly', zhR:'垄断'}]},
+    {n:'Remaining fab fleet (dep/etch/clean/metro)', zh:'其余晶圆厂设备群（沉积/刻蚀/清洗/量检测)', w:'$40–70', wk:'dep',
+     d:'The rest of the DRAM flow mirrors the logic flow — see the Chip-Making Process tab for the full stage-by-stage teardown.',
+     zhD:'DRAM 其余流程与逻辑制程同构——完整分阶段拆解见芯片制造全流程标签页。',
+     v:[{n:'Applied Materials', t:'NASDAQ: AMAT'},{n:'Lam Research', t:'NASDAQ: LRCX'},{n:'Tokyo Electron', t:'TYO: 8035'},{n:'KLA', t:'NASDAQ: KLAC'}]}
+  ],
+  mat:[
+    {n:'High-k precursors (Zr/Hf/Al)', zh:'高 k 前驱体（锆/铪/铝）', w:'$3–8', wk:'mat',
+     d:'Zirconium precursors for capacitor dielectrics are a Japanese/Korean specialty — Adeka is a marquee supplier into Samsung.',
+     zhD:'电容介质用锆前驱体是日韩特色品类——Adeka 是三星的标志性供应商。',
+     v:[{n:'Adeka', t:'TYO: 4401'},{n:'Soulbrain', t:'KOSDAQ: 357780'},{n:'DNF', t:'KOSDAQ: 092070'},{n:'Merck KGaA', t:'ETR: MRK'}]},
+    {n:'DRAM wafers & fab materials', zh:'DRAM 晶圆与厂内材料', w:'$8–15', wk:'mat',
+     d:'Prime 300 mm wafers plus the standard resist/gas/slurry basket (see Process tab).',
+     zhD:'300mm 抛光片加上标准的光刻胶/气体/研磨液篮子（见全流程标签页）。',
+     v:[{n:'Shin-Etsu / SUMCO', t:'TYO: 4063 · 3436'},{n:'Materials basket', t:'—', r:'see Process tab', zhR:'见全流程标签页'}]}
+  ],
+  note:'Merchant-scale HBM comes from just three companies — SK hynix (~50%+ share, HBM3E leader), Samsung and Micron — with China’s CXMT emerging on trailing generations (HBM2/HBM3-class). HBM consumes ~3× wafer capacity per bit vs DDR5 — the hidden DRAM-supply squeeze behind every AI capex cycle.',
+  zhNote:'规模化商用 HBM 仅出自三家公司——SK 海力士（约 50%+ 份额、HBM3E 领先）、三星与美光；中国长鑫（CXMT）正以上代产品（HBM2/HBM3 级）切入。HBM 每 bit 消耗约 3 倍于 DDR5 的晶圆产能——这是每轮 AI 资本开支周期背后隐藏的 DRAM 供给挤压。'
+},
+{ id:'base', n:'Base (Logic) Die Fabrication', zh:'基底逻辑裸片制造', short:'Base die', zhShort:'基底片', tag:'Foundry logic', zhTag:'逻辑代工',
+  d:'The bottom die of every stack carries the 1024-bit (HBM3E) or 2048-bit (HBM4) PHY, TSV redistribution, and test/repair logic. Through HBM3E it was made on the memory makers’ in-house processes; HBM4 flips the model — SK hynix’s base dies come from TSMC (logic-class nodes), Samsung uses its own 4nm foundry, and custom base dies for hyperscalers become a design business of their own.',
+  zhD:'每颗堆栈最底部的裸片承载 1024 位（HBM3E）或 2048 位（HBM4）PHY、TSV 再分布与测试/修复逻辑。到 HBM3E 为止由存储厂自有工艺制造；HBM4 改变了模式——SK 海力士的基底片由台积电（逻辑级节点）代工，三星用自家 4nm，而面向云厂商的定制基底片正成为独立的设计生意。',
+  tot:'Base die ≈$15–30 per stack (est.); rising sharply with HBM4 logic-process base dies', zhTot:'基底片约每颗堆栈 $15–30（估算）；HBM4 采用逻辑工艺后显著上升',
+  steps:[['PHY + logic design','PHY 与逻辑设计'],['Foundry fabrication','代工制造'],['TSV-ready BEOL','预留 TSV 的后道'],['Wafer test','晶圆测试']],
+  eq:[
+    {n:'Foundry logic process (HBM4 era)', zh:'逻辑代工工艺（HBM4 时代）', w:'$12–25', wk:'emb',
+     d:'TSMC fabricates SK hynix’s HBM4 base dies; Samsung keeps it in-house on 4nm; the base die becomes a genuine logic product.',
+     zhD:'台积电为 SK 海力士代工 HBM4 基底片；三星以自家 4nm 自制；基底片正成为真正的逻辑产品。',
+     v:[{n:'TSMC', t:'NYSE: TSM', r:'SK hynix HBM4 base dies', zhR:'SK 海力士 HBM4 基底片'},{n:'Samsung Foundry', t:'KRX: 005930', r:'in-house 4nm', zhR:'自家 4nm'},{n:'Micron', t:'NASDAQ: MU', r:'in-house base die', zhR:'自制基底片'}]},
+    {n:'PHY / controller IP & EDA', zh:'PHY/控制器 IP 与 EDA', w:'$2–5', wk:'ind',
+     d:'HBM PHY and controller IP licensed across the ecosystem for the SoC side and custom base dies.',
+     zhD:'HBM PHY 与控制器 IP 授权给 SoC 侧及定制基底片使用。',
+     v:[{n:'Synopsys', t:'NASDAQ: SNPS'},{n:'Cadence', t:'NASDAQ: CDNS'},{n:'Rambus', t:'NASDAQ: RMBS'}]}
+  ],
+  mat:[],
+  note:'The HBM4 base-die shift is strategic: it pulls TSMC into the memory value chain and opens the door to custom HBM (hyperscaler-specific base dies) — a new pricing axis for the three makers.',
+  zhNote:'HBM4 基底片转向意义重大：它把台积电拉进存储价值链，并打开定制化 HBM（云厂商专属基底片）的大门——为三家存储厂增加了新的定价维度。'
+},
+{ id:'tsv', n:'TSV Formation (via-middle)', zh:'TSV 硅通孔制造（via-middle）', short:'TSV', zhShort:'TSV', tag:'Mid-end (TSV)', zhTag:'中道（TSV）',
+  d:'Thousands of through-silicon vias per die (~5–6 µm wide, ~50 µm deep) form the vertical highway: Bosch-process deep reactive-ion etch, oxide liner, Ta/TiN barrier, Cu seed by PVD, bottom-up copper electroplating fill, anneal, then CMP to clear the overburden. Done "via-middle" — after transistors, before the upper interconnect.',
+  zhD:'每颗裸片数千个硅通孔（直径约 5–6µm、深约 50µm）构成垂直高速公路：Bosch 工艺深反应离子刻蚀、氧化物内衬、Ta/TiN 阻挡层、PVD 铜种子层、自下而上的铜电镀填充、退火，再以 CMP 去除多余铜。采用“via-middle”——在晶体管之后、上层互连之前完成。',
+  tot:'TSV module ≈$15–30 per stack (est.)', zhTot:'TSV 模块约每颗堆栈 $15–30（估算）',
+  steps:[['Deep Si etch (Bosch)','深硅刻蚀（Bosch）'],['Liner + barrier','内衬与阻挡层'],['Cu seed (PVD)','铜种子层（PVD）'],['ECD Cu fill','铜电镀填充'],['Anneal + CMP','退火与 CMP']],
+  eq:[
+    {n:'Deep reactive-ion etch (DRIE)', zh:'深反应离子刻蚀（DRIE）', w:'$5–10', wk:'dep',
+     d:'Alternating etch/passivation (Bosch) cycles carve 10:1 vias; Lam leads deep-silicon etch, with SPTS (KLA) from the MEMS world.',
+     zhD:'刻蚀/钝化交替的 Bosch 循环挖出 10:1 的通孔；Lam 在深硅刻蚀领先，KLA 旗下 SPTS 自 MEMS 领域切入。',
+     v:[{n:'Lam Research', t:'NASDAQ: LRCX', r:'leader', zhR:'龙头'},{n:'Tokyo Electron', t:'TYO: 8035'},{n:'SPTS (KLA)', t:'NASDAQ: KLAC'}]},
+    {n:'Liner / barrier / seed deposition', zh:'内衬/阻挡层/种子层沉积', w:'$4–8', wk:'dep',
+     d:'CVD oxide liner then Ta/TiN barrier and Cu seed sputtered on AMAT Endura-class platforms.',
+     zhD:'先 CVD 氧化物内衬，再在应材 Endura 级平台上溅射 Ta/TiN 阻挡层与铜种子层。',
+     v:[{n:'Applied Materials', t:'NASDAQ: AMAT', r:'barrier/seed leader', zhR:'阻挡/种子层龙头'},{n:'Lam Research', t:'NASDAQ: LRCX'}]},
+    {n:'Copper ECD fill', zh:'铜电镀（ECD）填充', w:'$4–8', wk:'dep',
+     d:'Bottom-up superfill of 50 µm-deep vias without voids — chemistry-sensitive and yield-critical.',
+     zhD:'50µm 深孔的自下而上无空洞填充——对镀液配方极其敏感，直接决定良率。',
+     v:[{n:'Lam Research (SABRE 3D)', t:'NASDAQ: LRCX', r:'leader', zhR:'龙头'},{n:'Applied Materials', t:'NASDAQ: AMAT'},{n:'ACM Research', t:'NASDAQ: ACMR'}]},
+    {n:'TSV CMP', zh:'TSV CMP', w:'$2–5', wk:'dep',
+     d:'Clears the copper overburden after fill; standard AMAT/Ebara duopoly.',
+     zhD:'去除填充后的多余铜层；仍是应材/荏原双寡头。',
+     v:[{n:'Applied Materials', t:'NASDAQ: AMAT'},{n:'Ebara', t:'TYO: 6361'}]}
+  ],
+  mat:[
+    {n:'Plating chemistry & Cu anodes', zh:'电镀液与铜阳极', w:'$2–5', wk:'mat',
+     d:'Superfill additive packages (accelerator/suppressor/leveler) tuned for deep vias.',
+     zhD:'为深孔调配的超填充添加剂体系（加速剂/抑制剂/整平剂）。',
+     v:[{n:'MKS (Atotech)', t:'NASDAQ: MKSI'},{n:'Element Solutions (MacDermid)', t:'NYSE: ESI'},{n:'JX Advanced Metals (anodes)', t:'TYO: 5016'}]},
+    {n:'Etch & deposition gases', zh:'刻蚀与沉积气体', w:'$2–4', wk:'mat',
+     d:'SF₆/C₄F₈ for the Bosch cycles plus liner precursors.',
+     zhD:'Bosch 循环所需的 SF₆/C₄F₈ 及内衬前驱体。',
+     v:[{n:'Resonac', t:'TYO: 4004'},{n:'Kanto Denka', t:'TYO: 4047'},{n:'Linde', t:'NASDAQ: LIN'},{n:'Merck KGaA', t:'ETR: MRK'}]},
+    {n:'CMP slurry & pads', zh:'CMP 研磨液与抛光垫', w:'$1–3', wk:'mat',
+     d:'Cu-selective slurries for overburden removal.',
+     zhD:'针对铜层去除的选择性研磨液。',
+     v:[{n:'Entegris (CMC)', t:'NASDAQ: ENTG'},{n:'Fujimi', t:'TYO: 5384'},{n:'DuPont (pads)', t:'NYSE: DD'}]}
+  ]
+},
+{ id:'bump', n:'Microbump / UBM Formation', zh:'微凸点/UBM 制造', short:'µBump', zhShort:'微凸点', tag:'Mid-end', zhTag:'中道',
+  d:'Tens of thousands of Cu-pillar + SnAg-cap microbumps per die at ~40–55 µm pitch: thick-film photoresist lithography on advanced-packaging steppers, under-bump-metallization sputter, pillar/solder electroplating, resist strip and reflow. HBM4 squeezes pitch further; hybrid bonding will eventually delete the bumps altogether.',
+  zhD:'每颗裸片数万个铜柱 + SnAg 帽微凸点，间距约 40–55µm：先进封装光刻机上的厚膜光刻胶曝光、凸点下金属化溅射、铜柱/焊料电镀、去胶与回流。HBM4 进一步压缩间距；混合键合最终将彻底取消凸点。',
+  tot:'Microbumping ≈$10–20 per stack (est.)', zhTot:'微凸点约每颗堆栈 $10–20（估算）',
+  steps:[['UBM sputter','UBM 溅射'],['Thick-resist litho','厚胶光刻'],['Cu pillar + SnAg plating','铜柱与焊料电镀'],['Strip + reflow','去胶与回流']],
+  eq:[
+    {n:'Advanced-packaging lithography', zh:'先进封装光刻机', w:'$3–6', wk:'dep',
+     d:'Steppers tuned for thick resist and warped wafers — a niche where Veeco (ex-Ultratech), Onto and Ushio, not ASML, lead.',
+     zhD:'针对厚胶与翘曲晶圆调校的曝光机——由 Veeco（原 Ultratech）、Onto 与牛尾主导的利基市场，而非 ASML。',
+     v:[{n:'Veeco', t:'NASDAQ: VECO'},{n:'Onto Innovation (JetStep)', t:'NYSE: ONTO'},{n:'Ushio', t:'TYO: 6925'},{n:'Canon', t:'TYO: 7751'}]},
+    {n:'UBM / seed sputter (PVD)', zh:'UBM/种子层溅射（PVD）', w:'$2–4', wk:'dep',
+     d:'Adhesion + seed metallization under every bump.',
+     zhD:'每个凸点下方的粘附与种子金属化。',
+     v:[{n:'Applied Materials', t:'NASDAQ: AMAT'},{n:'Ulvac', t:'TYO: 6728'}]},
+    {n:'Pillar / solder electroplating', zh:'铜柱/焊料电镀', w:'$3–6', wk:'dep',
+     d:'Packaging-grade ECD; ACM Research has carved a real position here alongside Lam and AMAT.',
+     zhD:'封装级电镀；除 Lam 与应材外，盛美（ACM）在此建立了实质地位。',
+     v:[{n:'Lam Research', t:'NASDAQ: LRCX'},{n:'Applied Materials', t:'NASDAQ: AMAT'},{n:'ACM Research', t:'NASDAQ: ACMR'}]}
+  ],
+  mat:[
+    {n:'Thick photoresists & dry films', zh:'厚膜光刻胶与干膜', w:'$2–5', wk:'mat',
+     d:'50–100 µm resist layers defining the pillar molds.',
+     zhD:'定义铜柱模腔的 50–100µm 厚胶层。',
+     v:[{n:'JSR', t:'JIC, private', zhT:'JIC 私有化'},{n:'TOK', t:'TYO: 4186'},{n:'DuPont', t:'NYSE: DD'},{n:'Resonac', t:'TYO: 4004'}]},
+    {n:'Solder chemistry (SnAg) & flux', zh:'焊料化学品（SnAg）与助焊剂', w:'$1–3', wk:'mat',
+     d:'Plating baths for the solder caps plus reflow flux.',
+     zhD:'焊帽电镀液与回流助焊剂。',
+     v:[{n:'Element Solutions (MacDermid)', t:'NYSE: ESI'},{n:'Ishihara Chemical', t:'Private', zhT:'非上市'},{n:'Senju Metal', t:'Private', zhT:'非上市'}]}
+  ]
+},
+{ id:'thin', n:'Carrier Bond, Thinning & TSV Reveal', zh:'临时键合、减薄与 TSV 露头', short:'Thin/reveal', zhShort:'减薄', tag:'Mid-end', zhTag:'中道',
+  d:'The bumped wafer is temporarily bonded face-down to a glass or silicon carrier with a debondable adhesive, back-ground from 775 µm to ~30–50 µm (12/16-Hi needs the thinnest dies), then the TSV tips are revealed by silicon recess etch + CMP, passivated and given backside pads. Finally: laser or mechanical debond. Handling 30 µm wafers without cracking them is the quiet art of HBM.',
+  zhD:'带凸点的晶圆以可解键合胶面朝下临时键合到玻璃或硅载板上，从 775µm 背磨至约 30–50µm（12/16 层堆栈需要最薄的裸片），再以硅回蚀 + CMP 让 TSV 尖端露出，钝化并制作背面焊盘，最后激光或机械解键合。让 30µm 的晶圆不碎裂，是 HBM 里安静的手艺。',
+  tot:'Thinning module ≈$8–15 per stack (est.)', zhTot:'减薄模块约每颗堆栈 $8–15（估算）',
+  steps:[['Temporary bond','临时键合'],['Back-grind','背面减薄'],['TSV reveal (etch+CMP)','TSV 露头'],['Backside pads','背面焊盘'],['Debond','解键合']],
+  eq:[
+    {n:'Temporary bond / debond systems', zh:'临时键合/解键合设备', w:'$2–4', wk:'dep',
+     d:'EV Group is the franchise; TOK’s "Zero Newton" debonders and SUSS round out the field.',
+     zhD:'EV Group 是该领域的招牌；TOK 的“零牛顿”解键合机与 SUSS 补齐格局。',
+     v:[{n:'EV Group', t:'Private', zhT:'非上市', r:'leader', zhR:'龙头'},{n:'SUSS MicroTec', t:'ETR: SMHN'},{n:'TOK (Zero Newton)', t:'TYO: 4186'}]},
+    {n:'Grinders & polishers', zh:'减薄磨床与抛光机', w:'$2–4', wk:'dep',
+     d:'Disco’s grind-polish franchise extends straight into HBM die thinning.',
+     zhD:'迪斯科的磨抛体系直接延伸到 HBM 裸片减薄。',
+     v:[{n:'Disco', t:'TYO: 6146', r:'leader', zhR:'龙头'},{n:'Accretech', t:'TYO: 7729'}]},
+    {n:'TSV-reveal etch & CMP', zh:'TSV 露头刻蚀与 CMP', w:'$2–4', wk:'dep',
+     d:'Silicon recess etch exposes the via tips; gentle CMP planarizes without smearing copper.',
+     zhD:'硅回蚀让通孔尖端露出；温和 CMP 平坦化且不污染铜。',
+     v:[{n:'Lam Research', t:'NASDAQ: LRCX'},{n:'SPTS (KLA)', t:'NASDAQ: KLAC'},{n:'Ebara', t:'TYO: 6361'}]}
+  ],
+  mat:[
+    {n:'Temporary bonding adhesives', zh:'临时键合胶', w:'$2–4', wk:'mat',
+     d:'Debondable adhesive systems — Brewer Science is the reference name.',
+     zhD:'可解键合胶体系——Brewer Science 是行业标杆。',
+     v:[{n:'Brewer Science', t:'Private', zhT:'非上市', r:'leader', zhR:'龙头'},{n:'TOK', t:'TYO: 4186'},{n:'3M', t:'NYSE: MMM'},{n:'Shin-Etsu', t:'TYO: 4063'}]},
+    {n:'Carrier wafers (glass / Si)', zh:'载板晶圆（玻璃/硅）', w:'$1–3', wk:'mat',
+     d:'Reusable glass carriers from the display-glass giants; silicon carriers from wafer reclaimers.',
+     zhD:'可重复使用的玻璃载板来自显示玻璃巨头；硅载板来自晶圆再生厂。',
+     v:[{n:'Corning', t:'NYSE: GLW'},{n:'AGC', t:'TYO: 5201'},{n:'SUMCO / reclaim', t:'TYO: 3436'}]}
+  ]
+},
+{ id:'stack', n:'Die Stacking & Bonding', zh:'裸片堆叠与键合', short:'Stack/bond', zhShort:'堆叠', tag:'Back-end', zhTag:'后道',
+  d:'Known-good dies are stacked 8/12/16-high on the base die. Two schools: TCB — thermo-compression bonding with NCF film (Samsung, Micron) — versus SK hynix’s MR-MUF (mass reflow + molded underfill), which is faster and dissipates heat better and underpinned its 12-Hi HBM3E lead. Next: bumpless Cu–Cu hybrid bonding for 16/20-Hi HBM4E/HBM5. Stacking yield compounds die-by-die — one bad bond scraps the whole cube.',
+  zhD:'合格裸片在基底片上堆叠 8/12/16 层。两大流派：TCB——热压键合加 NCF 膜（三星、美光）——对阵 SK 海力士的 MR-MUF（批量回流 + 模压底填），后者更快、散热更好，是其 12 层 HBM3E 领先的底牌。下一步：面向 16/20 层 HBM4E/HBM5 的无凸点铜-铜混合键合。堆叠良率逐层相乘——一个坏键合点即报废整颗立方体。',
+  tot:'Stacking & bonding ≈$25–50 per stack (est.) — the yield crucible', zhTot:'堆叠键合约每颗堆栈 $25–50（估算）——良率的试炼场',
+  steps:[['Die attach on base','基底贴片'],['TCB / mass reflow','热压或批量回流'],['(NCF or MR-MUF)','（NCF 或 MR-MUF）'],['Stack inspection','堆叠检测']],
+  eq:[
+    {n:'Thermo-compression (TC) bonders', zh:'热压键合机（TCB）', w:'$15–30', wk:'dep',
+     d:'The signature HBM tool. Hanmi Semiconductor’s dual TC bonders are SK hynix’s workhorse; ASMPT serves Samsung/Micron alongside Samsung’s in-house SEMES.',
+     zhD:'HBM 的标志性设备。韩美半导体的双头 TC 键合机是 SK 海力士的主力；ASMPT 服务三星/美光，三星另有自家 SEMES。',
+     v:[{n:'Hanmi Semiconductor', t:'KRX: 042700', r:'SK hynix mainstay', zhR:'SK 海力士主力供应商'},{n:'ASMPT', t:'HKG: 0522'},{n:'SEMES', t:'Samsung subsidiary', zhT:'三星子公司'},{n:'Hanwha Semitech', t:'Hanwha (KRX: 000880)', zhT:'韩华（KRX: 000880）旗下', r:'SK hynix second source', zhR:'SK 海力士第二供应商'},{n:'Shinkawa (Yamaha)', t:'Yamaha Motor (TYO: 7272)', zhT:'雅马哈发动机（TYO: 7272）旗下'}]},
+    {n:'Hybrid (Cu–Cu) bonders — roadmap', zh:'混合键合机（铜-铜）——路线图', w:'HBM4E+', wk:'dep',
+     d:'Bumpless direct bonding shrinks stack height and thermal resistance; BESI (with Applied Materials) and EVG lead the toolchain race for 16/20-Hi.',
+     zhD:'无凸点直接键合可压缩堆栈高度与热阻；BESI（联手应材）与 EVG 在 16/20 层工具链竞赛中领跑。',
+     v:[{n:'BE Semiconductor', t:'AMS: BESI', r:'with AMAT', zhR:'与应材合作'},{n:'EV Group', t:'Private', zhT:'非上市'},{n:'Applied Materials', t:'NASDAQ: AMAT'}]}
+  ],
+  mat:[
+    {n:'NCF (non-conductive film)', zh:'NCF 非导电薄膜', w:'$3–8', wk:'mat',
+     d:'The between-die adhesive/insulation film for the TCB route; Resonac is the dominant supplier.',
+     zhD:'TCB 路线中裸片之间的粘接/绝缘膜；Resonac 占主导。',
+     v:[{n:'Resonac', t:'TYO: 4004', r:'dominant in NCF', zhR:'NCF 主导者'},{n:'Nitto Denko', t:'TYO: 6988'}]},
+    {n:'Flux & bonding consumables', zh:'助焊剂与键合耗材', w:'$1–2', wk:'mat',
+     d:'Reflow flux and cleaning chemistry for the solder-joint routes.',
+     zhD:'焊点路线所需的回流助焊剂与清洗化学品。',
+     v:[{n:'Senju Metal', t:'Private', zhT:'非上市'},{n:'Element Solutions', t:'NYSE: ESI'}]}
+  ],
+  note:'The TC-bonder trade (Hanmi +~10x in 2023–24) was the purest HBM equipment play of this cycle; the next battleground is whether hybrid bonding (BESI/AMAT/EVG) displaces the TCB incumbents at HBM4E/HBM5.',
+  zhNote:'TC 键合机行情（韩美半导体 2023–24 年涨约十倍）是本轮周期最纯粹的 HBM 设备交易；下一个战场是混合键合（BESI/应材/EVG）能否在 HBM4E/HBM5 取代 TCB 既有格局。'
+},
+{ id:'mold', n:'Molding & Underfill (MR-MUF / NCF)', zh:'塑封与底填（MR-MUF/NCF）', short:'Mold', zhShort:'塑封', tag:'Back-end', zhTag:'后道',
+  d:'SK hynix’s MR-MUF flows a liquid epoxy molding compound between and around the reflowed dies in one compression-molding shot — underfill and mold in one, with better heat paths; the TCB-NCF route already has film between dies and takes an over-mold. Warpage control on ~30 µm dies is the engineering fight at 16-Hi.',
+  zhD:'SK 海力士的 MR-MUF 在一次压缩成型中让液态环氧塑封料流入回流后裸片之间及四周——底填与塑封一步完成、导热更佳；TCB-NCF 路线层间已有薄膜，仅需外层塑封。16 层堆栈上约 30µm 裸片的翘曲控制是核心工程难题。',
+  tot:'Molding ≈$5–12 per stack (est.)', zhTot:'塑封约每颗堆栈 $5–12（估算）',
+  steps:[['Compression molding','压缩成型'],['Cure','固化'],['Grind to height','磨至标称高度'],['Singulation','切割分离']],
+  eq:[
+    {n:'Compression molding presses', zh:'压缩成型机', w:'$2–4', wk:'dep',
+     d:'TOWA is the quiet franchise here — its presses underpin MR-MUF; APIC Yamada and ASMPT follow.',
+     zhD:'TOWA 是这里安静的赢家——其压机支撑着 MR-MUF；APIC Yamada 与 ASMPT 随后。',
+     v:[{n:'TOWA', t:'TYO: 6315', r:'leader', zhR:'龙头'},{n:'APIC Yamada', t:'Japan', zhT:'日本'},{n:'ASMPT', t:'HKG: 0522'}]}
+  ],
+  mat:[
+    {n:'Liquid EMC for MR-MUF', zh:'MR-MUF 液态塑封料', w:'$2–5', wk:'mat',
+     d:'The specialty liquid epoxy that made MR-MUF work — Nagase ChemteX is the marquee supplier into SK hynix.',
+     zhD:'让 MR-MUF 成立的特种液态环氧——长濑 ChemteX 是 SK 海力士的标志性供应商。',
+     v:[{n:'Nagase (ChemteX)', t:'TYO: 8012', r:'key MR-MUF EMC', zhR:'MR-MUF 塑封料核心供应商'},{n:'Namics', t:'Private', zhT:'非上市'}]},
+    {n:'Granular EMC / over-mold', zh:'颗粒塑封料/外层塑封', w:'$1–3', wk:'mat',
+     d:'Conventional epoxy molding compounds for the NCF route’s over-mold.',
+     zhD:'NCF 路线外层塑封所用的常规环氧塑封料。',
+     v:[{n:'Resonac', t:'TYO: 4004'},{n:'Sumitomo Bakelite', t:'TYO: 4203'}]}
+  ],
+  note:'Materials picked the winner here: MR-MUF’s thermal advantage (liquid EMC) is a chemistry moat as much as an equipment one — Nagase and TOWA are its listed proxies.',
+  zhNote:'这一环节是材料决定胜负：MR-MUF 的散热优势（液态塑封料）既是设备护城河更是化学护城河——长濑与 TOWA 是其上市代理标的。'
+},
+{ id:'ktest', n:'Stack Test & Burn-in (KGSD)', zh:'堆栈测试与老化（KGSD）', short:'KGSD test', zhShort:'测试', tag:'Test', zhTag:'测试',
+  d:'Every core die is tested pre-stack (KGD), and the finished cube is tested again through direct-access pads and IEEE-1500 logic — with per-lane repair mapping around defects. HBM test time per bit far exceeds commodity DRAM, and burn-in is mandatory for AI parts: test capex per stack keeps climbing with height and speed.',
+  zhD:'每颗核心裸片在堆叠前先测（KGD），成品立方体再经直连焊盘与 IEEE-1500 逻辑复测——并按通道映射修复缺陷。HBM 每 bit 测试时长远超普通 DRAM，AI 器件必须老化：随层数与速率提升，每颗堆栈的测试资本开支持续攀升。',
+  tot:'Test & burn-in ≈$20–40 per stack (est.)', zhTot:'测试与老化约每颗堆栈 $20–40（估算）',
+  steps:[['KGD pre-test','KGD 预测试'],['Stack test','堆栈测试'],['Repair mapping','修复映射'],['Burn-in','老化'],['KGSD ship','KGSD 出货']],
+  eq:[
+    {n:'Memory ATE', zh:'存储测试机（ATE）', w:'$12–25', wk:'dep',
+     d:'Advantest dominates HBM test; every speed-grade upgrade stretches test time and sells more testers.',
+     zhD:'爱德万主导 HBM 测试；每次速率升级都拉长测试时间、卖出更多测试机。',
+     v:[{n:'Advantest', t:'TYO: 6857', r:'HBM test leader', zhR:'HBM 测试龙头'},{n:'Teradyne (Magnum)', t:'NASDAQ: TER'}]},
+    {n:'Probers & handlers', zh:'探针台与分选机', w:'$3–6', wk:'dep',
+     d:'The familiar TEL/Accretech duopoly, adapted for thin stacked parts.',
+     zhD:'仍是东京电子/Accretech 双寡头，为超薄堆叠器件改造。',
+     v:[{n:'Tokyo Electron', t:'TYO: 8035'},{n:'Accretech', t:'TYO: 7729'}]},
+    {n:'Burn-in / wafer-level burn-in', zh:'老化/晶圆级老化', w:'$2–5', wk:'dep',
+     d:'Elevated voltage/temperature screening; Aehr pitches wafer-level burn-in for stacked memory.',
+     zhD:'高压高温筛选；Aehr 主打面向堆叠存储的晶圆级老化。',
+     v:[{n:'Aehr Test Systems', t:'NASDAQ: AEHR'},{n:'Advantest', t:'TYO: 6857'}]}
+  ],
+  mat:[
+    {n:'Probe cards (HBM)', zh:'探针卡（HBM）', w:'$3–6', wk:'mat',
+     d:'Fine-pitch MEMS cards contacting microbump arrays — FormFactor leads the HBM niche.',
+     zhD:'接触微凸点阵列的细间距 MEMS 探针卡——FormFactor 在 HBM 细分领先。',
+     v:[{n:'FormFactor', t:'NASDAQ: FORM', r:'HBM leader', zhR:'HBM 细分龙头'},{n:'Micronics Japan', t:'TYO: 6871'},{n:'Technoprobe', t:'BIT: TPRO'}]}
+  ]
+},
+{ id:'cowos', n:'2.5D Integration (CoWoS-class)', zh:'2.5D 集成（CoWoS 级）', short:'CoWoS', zhShort:'CoWoS', tag:'2.5D integration', zhTag:'2.5D 集成',
+  d:'Finished cubes ship as known-good stacked die to the foundry or OSAT, where they sit beside the GPU/accelerator on a silicon interposer (TSMC CoWoS, Samsung I-Cube) — Intel’s EMIB instead embeds small silicon bridges in the substrate: chip-on-wafer bonding, underfill, then on-substrate assembly onto a large ABF package. CoWoS capacity — not HBM output — has repeatedly been the binding constraint on AI accelerator shipments.',
+  zhD:'成品立方体以“合格堆叠裸片”（KGSD）形式交付代工厂或封测厂，与 GPU/加速器一起装在硅中介层上（台积电 CoWoS、三星 I-Cube；英特尔 EMIB 则以基板内嵌硅桥替代整块中介层）：先晶上键合、底填，再装配到大尺寸 ABF 基板上。AI 加速器出货的硬约束屡次是 CoWoS 产能，而非 HBM 产量。',
+  tot:'2.5D integration share ≈$30–60 per stack (est.)', zhTot:'2.5D 集成分摊约每颗堆栈 $30–60（估算）',
+  steps:[['Interposer fab (TSV)','中介层制造（TSV）'],['Chip-on-wafer bond','晶上键合'],['Underfill','底填'],['On-substrate assembly','基板装配'],['Final test','终测']],
+  eq:[
+    {n:'CoWoS line & bonding fleet', zh:'CoWoS 产线与键合设备群', w:'$20–40', wk:'dep',
+     d:'TSMC runs the dominant 2.5D franchise on ~65 nm interposer lines plus BESI/ASMPT-class bonders; Amkor and SPIL take overflow on-substrate steps.',
+     zhD:'台积电以约 65nm 中介层产线加 BESI/ASMPT 级键合机运营着最大的 2.5D 体系；Amkor 与矽品承接外溢的基板段工序。',
+     v:[{n:'TSMC (CoWoS)', t:'NYSE: TSM', r:'dominant', zhR:'主导'},{n:'BE Semiconductor', t:'AMS: BESI'},{n:'ASMPT', t:'HKG: 0522'},{n:'Amkor', t:'NASDAQ: AMKR'},{n:'SPIL (ASE)', t:'TWSE: 3711'}]},
+    {n:'Underfill dispense', zh:'底填点胶', w:'$1–3', wk:'dep',
+     d:'Precision dispense of capillary underfill around each die.',
+     zhD:'在每颗裸片周围精密点入毛细底填胶。',
+     v:[{n:'Nordson', t:'NASDAQ: NDSN'},{n:'Musashi Engineering', t:'Private', zhT:'非上市'}]}
+  ],
+  mat:[
+    {n:'Silicon interposer', zh:'硅中介层', w:'$8–20', wk:'mat',
+     d:'Reticle-stitched TSV silicon interposers (CoWoS-S); at multi-reticle sizes CoWoS-L shifts to an RDL interposer with embedded silicon (LSI) bridges. Made by TSMC internally, with UMC as second source for some designs.',
+     zhD:'跨光罩拼接的 TSV 硅中介层（CoWoS-S）；到多光罩尺寸，CoWoS-L 转为内嵌硅桥（LSI）的 RDL 中介层。台积电自制，部分设计以联电为第二来源。',
+     v:[{n:'TSMC', t:'NYSE: TSM'},{n:'UMC', t:'NYSE: UMC'}]},
+    {n:'Underfill, TIM & substrate interface', zh:'底填胶、导热界面与基板材料', w:'$2–5', wk:'mat',
+     d:'Capillary underfill and thermal-interface materials; the ABF substrate itself is covered in the Packaging stage of the Process tab.',
+     zhD:'毛细底填胶与导热界面材料；ABF 基板本身见全流程标签页的封装阶段。',
+     v:[{n:'Namics', t:'Private', zhT:'非上市'},{n:'Henkel', t:'ETR: HEN3'},{n:'Shin-Etsu (TIM)', t:'TYO: 4063'}]}
+  ],
+  note:'The AI-memory bottleneck stack, in order: CoWoS capacity → TC-bonder capacity → DRAM wafer capacity. Whoever debottlenecks first (TSMC capex, Hanmi/ASMPT shipments, memory-fab conversions) sets the quarter’s accelerator supply.',
+  zhNote:'AI 存储瓶颈的顺序：CoWoS 产能 → TC 键合机产能 → DRAM 晶圆产能。谁先解除瓶颈（台积电资本开支、韩美/ASMPT 出货、存储厂产线转换），谁就决定当季加速器供给。'
+}
+];
+
+/* ---- HBM stage schematics ---- */
+const HBM_GFX = {
+dram: ()=>`<svg viewBox="0 0 960 250" xmlns="http://www.w3.org/2000/svg">
+  <g class="gx" data-k="e0">
+    <rect class="shp f-inf" x="50" y="35" width="190" height="150" rx="9"/>
+    <line x1="80" y1="70" x2="80" y2="150" stroke="#7cc4ff" stroke-width="5"/>
+    <line x1="105" y1="70" x2="105" y2="150" stroke="#7cc4ff" stroke-width="5"/>
+    <line x1="130" y1="70" x2="130" y2="150" stroke="#7cc4ff" stroke-width="5"/>
+    <line x1="155" y1="70" x2="155" y2="150" stroke="#7cc4ff" stroke-width="5"/>
+    <line x1="180" y1="70" x2="180" y2="150" stroke="#7cc4ff" stroke-width="5"/>
+    <line x1="205" y1="70" x2="205" y2="150" stroke="#7cc4ff" stroke-width="5"/>
+    <line x1="66" y1="155" x2="222" y2="155" stroke="#cfd8ea" stroke-width="4"/>
+    <text class="lbl-s" x="66" y="60">${T('40:1 capacitor cells','40:1 电容单元')}</text>
+    <text class="lbl" x="46" y="215">${T('Capacitor etch','电容刻蚀')}</text>
+  </g>
+  <g class="gx" data-k="e1">
+    <rect class="shp f-inf" x="300" y="55" width="140" height="110" rx="9"/>
+    <circle cx="335" cy="85" r="5" fill="#7cc4ff"/><circle cx="357" cy="85" r="5" fill="#38d9a9"/><circle cx="379" cy="85" r="5" fill="#7cc4ff"/><circle cx="401" cy="85" r="5" fill="#38d9a9"/>
+    <line x1="325" y1="135" x2="415" y2="135" stroke="#cfd8ea" stroke-width="4"/>
+    <text class="lbl" x="300" y="200">${T('High-k ALD (ZrO₂)','高 k ALD（ZrO₂）')}</text>
+  </g>
+  <g class="gx" data-k="e2">
+    <rect class="shp f-inf" x="495" y="55" width="140" height="110" rx="9"/>
+    <circle cx="525" cy="140" r="5" fill="#ffd06b"/>
+    <path d="M525,140 L555,95 L590,115 L605,75" fill="none" stroke="#c39bff" stroke-dasharray="4 4"/>
+    <text class="lbl" x="490" y="200">${T('EUV / DUV litho','EUV/DUV 光刻')}</text>
+  </g>
+  <g class="gx" data-k="e3">
+    <rect class="shp f-inf" x="690" y="55" width="130" height="110" rx="9"/>
+    <rect x="705" y="75" width="30" height="25" fill="#16233e" stroke="#2c4271"/><rect x="742" y="75" width="30" height="25" fill="#16233e" stroke="#2c4271"/><rect x="779" y="75" width="28" height="25" fill="#16233e" stroke="#2c4271"/>
+    <rect x="705" y="108" width="102" height="25" fill="#16233e" stroke="#2c4271"/>
+    <text class="lbl" x="680" y="200">${T('Rest of fab fleet →','其余设备群 →')}</text>
+  </g>
+  <g class="gx" data-k="m0">
+    <path class="shp f-stg" d="M868,120 a13,13 0 1 0 0.1,0 z M860,111 h16 v-9 h-16 z"/>
+    <text class="lbl-s" x="838" y="165">${T('Zr precursors','锆前驱体')}</text>
+  </g>
+  <g class="gx" data-k="m1">
+    <circle class="shp" cx="880" cy="55" r="26" fill="#cfd8ea" stroke="#9fb0cf"/>
+    <text class="lbl-s" x="852" y="98">${T('DRAM wafer','DRAM 晶圆')}</text>
+  </g>
+</svg>`,
+base: ()=>`<svg viewBox="0 0 960 250" xmlns="http://www.w3.org/2000/svg">
+  <g class="gx" data-k="e0">
+    <rect class="shp f-inf" x="240" y="40" width="380" height="160" rx="10"/>
+    <rect x="260" y="58" width="150" height="34" fill="rgba(124,196,255,.25)" stroke="#2c4271"/><text class="lbl-s" x="268" y="80">${T('HBM PHY (1024/2048-bit)','HBM PHY（1024/2048 位）')}</text>
+    <rect x="425" y="58" width="80" height="34" fill="rgba(177,151,252,.25)" stroke="#2c4271"/><text class="lbl-s" x="432" y="80">${T('test/repair','测试/修复')}</text>
+    <rect x="520" y="58" width="80" height="34" fill="rgba(105,219,124,.2)" stroke="#2c4271"/><text class="lbl-s" x="528" y="80">${T('logic (HBM4)','逻辑（HBM4）')}</text>
+    <circle cx="280" cy="130" r="4" fill="#ffa94d"/><circle cx="320" cy="130" r="4" fill="#ffa94d"/><circle cx="360" cy="130" r="4" fill="#ffa94d"/><circle cx="400" cy="130" r="4" fill="#ffa94d"/><circle cx="440" cy="130" r="4" fill="#ffa94d"/><circle cx="480" cy="130" r="4" fill="#ffa94d"/><circle cx="520" cy="130" r="4" fill="#ffa94d"/><circle cx="560" cy="130" r="4" fill="#ffa94d"/>
+    <circle cx="280" cy="165" r="4" fill="#ffa94d"/><circle cx="320" cy="165" r="4" fill="#ffa94d"/><circle cx="360" cy="165" r="4" fill="#ffa94d"/><circle cx="400" cy="165" r="4" fill="#ffa94d"/><circle cx="440" cy="165" r="4" fill="#ffa94d"/><circle cx="480" cy="165" r="4" fill="#ffa94d"/><circle cx="520" cy="165" r="4" fill="#ffa94d"/><circle cx="560" cy="165" r="4" fill="#ffa94d"/>
+    <text class="lbl-s" x="600" y="150">${T('TSV grid','TSV 阵列')}</text>
+    <text class="lbl" x="240" y="230">${T('Base die — in-house (≤HBM3E) → TSMC / in-house 4nm (HBM4)','基底片 — 自制（≤HBM3E）→ 台积电/自家 4nm（HBM4）')}</text>
+  </g>
+  <g class="gx" data-k="e1">
+    <rect class="shp f-inf" x="700" y="60" width="130" height="90" rx="9"/>
+    <rect x="714" y="74" width="102" height="50" fill="#0b1020" stroke="#2c4271"/>
+    <text class="lbl-s" x="726" y="102">PHY IP</text>
+    <text class="lbl" x="694" y="185">${T('PHY / controller IP','PHY/控制器 IP')}</text>
+  </g>
+</svg>`,
+tsv: ()=>`<svg viewBox="0 0 960 250" xmlns="http://www.w3.org/2000/svg">
+  <rect x="60" y="120" width="560" height="80" fill="#1a2440" stroke="#2c4271"/>
+  <text class="lbl-s" x="66" y="215">${T('silicon (cross-section)','硅（剖面）')}</text>
+  <g class="gx" data-k="e0">
+    <rect class="shp f-inf" x="95" y="128" width="26" height="64" rx="3" fill="#0b1020"/>
+    <rect class="shp f-inf" x="150" y="128" width="26" height="64" rx="3" fill="#0b1020"/>
+    <ellipse cx="135" cy="95" rx="60" ry="16" fill="rgba(177,151,252,.3)"/>
+    <text class="lbl" x="70" y="235">${T('DRIE etch (Bosch)','DRIE 深硅刻蚀')}</text>
+  </g>
+  <g class="gx" data-k="e1">
+    <rect class="shp" x="250" y="128" width="26" height="64" rx="3" fill="#0b1020" stroke="#38d9a9" stroke-width="2.5"/>
+    <text class="lbl" x="215" y="235">${T('Liner + barrier + seed','内衬/阻挡/种子层')}</text>
+  </g>
+  <g class="gx" data-k="e2">
+    <rect class="shp" x="360" y="128" width="26" height="64" rx="3" fill="rgba(255,169,77,.8)" stroke="#ffa94d"/>
+    <rect class="shp" x="415" y="128" width="26" height="64" rx="3" fill="rgba(255,169,77,.8)" stroke="#ffa94d"/>
+    <text class="lbl" x="352" y="235">${T('Cu ECD fill','铜电镀填充')}</text>
+  </g>
+  <g class="gx" data-k="e3">
+    <rect class="shp f-inf" x="490" y="80" width="90" height="30" rx="6"/>
+    <line x1="500" y1="118" x2="570" y2="118" stroke="#cfd8ea" stroke-width="4"/>
+    <text class="lbl" x="488" y="235">${T('CMP overburden','CMP 去除余铜')}</text>
+  </g>
+  <g class="gx" data-k="m0">
+    <rect class="shp f-stg" x="680" y="90" width="24" height="52" rx="5"/>
+    <text class="lbl-s" x="655" y="165">${T('plating chem','电镀液')}</text>
+  </g>
+  <g class="gx" data-k="m1">
+    <rect class="shp f-stg" x="760" y="82" width="22" height="60" rx="7"/><rect class="shp f-stg" x="790" y="82" width="22" height="60" rx="7"/>
+    <text class="lbl-s" x="752" y="165">SF₆ · C₄F₈</text>
+  </g>
+  <g class="gx" data-k="m2">
+    <rect class="shp f-stg" x="860" y="95" width="22" height="46" rx="5"/>
+    <text class="lbl-s" x="845" y="165">${T('slurry','研磨液')}</text>
+  </g>
+</svg>`,
+bump: ()=>`<svg viewBox="0 0 960 250" xmlns="http://www.w3.org/2000/svg">
+  <rect x="60" y="60" width="240" height="130" rx="6" fill="#1a2440" stroke="#2c4271"/>
+  <circle cx="90" cy="90" r="6" fill="#ffa94d"/><circle cx="122" cy="90" r="6" fill="#ffa94d"/><circle cx="154" cy="90" r="6" fill="#ffa94d"/><circle cx="186" cy="90" r="6" fill="#ffa94d"/><circle cx="218" cy="90" r="6" fill="#ffa94d"/><circle cx="250" cy="90" r="6" fill="#ffa94d"/>
+  <circle cx="90" cy="122" r="6" fill="#ffa94d"/><circle cx="122" cy="122" r="6" fill="#ffa94d"/><circle cx="154" cy="122" r="6" fill="#ffa94d"/><circle cx="186" cy="122" r="6" fill="#ffa94d"/><circle cx="218" cy="122" r="6" fill="#ffa94d"/><circle cx="250" cy="122" r="6" fill="#ffa94d"/>
+  <circle cx="90" cy="154" r="6" fill="#ffa94d"/><circle cx="122" cy="154" r="6" fill="#ffa94d"/><circle cx="154" cy="154" r="6" fill="#ffa94d"/><circle cx="186" cy="154" r="6" fill="#ffa94d"/><circle cx="218" cy="154" r="6" fill="#ffa94d"/><circle cx="250" cy="154" r="6" fill="#ffa94d"/>
+  <text class="lbl-s" x="60" y="215">${T('Cu-pillar microbumps · 40–55 µm pitch','铜柱微凸点 · 40–55µm 间距')}</text>
+  <g class="gx" data-k="e0">
+    <rect class="shp f-inf" x="370" y="45" width="150" height="115" rx="9"/>
+    <ellipse cx="445" cy="85" rx="30" ry="9" fill="rgba(177,151,252,.3)" stroke="#8a78c8"/>
+    <line x1="445" y1="95" x2="445" y2="140" stroke="#c39bff" stroke-dasharray="3 4"/>
+    <text class="lbl" x="352" y="200">${T('AP litho stepper','先进封装光刻机')}</text>
+  </g>
+  <g class="gx" data-k="e1">
+    <rect class="shp f-inf" x="570" y="45" width="130" height="115" rx="9"/>
+    <rect x="588" y="60" width="94" height="10" rx="3" fill="#1b2a4a" stroke="#2c4271"/>
+    <line x1="600" y1="130" x2="670" y2="130" stroke="#cfd8ea" stroke-width="4"/>
+    <text class="lbl" x="560" y="200">${T('UBM sputter','UBM 溅射')}</text>
+  </g>
+  <g class="gx" data-k="e2">
+    <rect class="shp f-inf" x="750" y="45" width="140" height="115" rx="9"/>
+    <rect x="770" y="80" width="100" height="55" rx="5" fill="rgba(56,217,169,.15)" stroke="#2d5444"/>
+    <rect x="795" y="65" width="50" height="10" fill="#cfd8ea"/>
+    <text class="lbl" x="742" y="200">${T('Pillar plating cell','铜柱电镀槽')}</text>
+  </g>
+  <g class="gx" data-k="m0">
+    <rect class="shp f-stg" x="380" y="215" width="22" height="28" rx="4"/>
+    <text class="lbl-s" x="410" y="234">${T('thick resist / dry film','厚胶/干膜')}</text>
+  </g>
+  <g class="gx" data-k="m1">
+    <rect class="shp f-stg" x="620" y="215" width="22" height="28" rx="4"/>
+    <text class="lbl-s" x="650" y="234">${T('SnAg chemistry + flux','SnAg 镀液与助焊剂')}</text>
+  </g>
+</svg>`,
+thin: ()=>`<svg viewBox="0 0 960 250" xmlns="http://www.w3.org/2000/svg">
+  <g class="gx" data-k="m1">
+    <rect class="shp f-stg" x="220" y="160" width="420" height="22" rx="4"/>
+    <text class="lbl-s" x="222" y="205">${T('glass / Si carrier','玻璃/硅载板')}</text>
+  </g>
+  <g class="gx" data-k="m0">
+    <rect class="shp f-stg" x="220" y="150" width="420" height="10"/>
+    <text class="lbl-s" x="648" y="160">${T('← adhesive','← 键合胶')}</text>
+  </g>
+  <rect x="220" y="130" width="420" height="20" fill="#cfd8ea" opacity=".9"/>
+  <circle cx="280" cy="127" r="2.5" fill="#ffa94d"/><circle cx="330" cy="127" r="2.5" fill="#ffa94d"/><circle cx="380" cy="127" r="2.5" fill="#ffa94d"/><circle cx="430" cy="127" r="2.5" fill="#ffa94d"/><circle cx="480" cy="127" r="2.5" fill="#ffa94d"/><circle cx="530" cy="127" r="2.5" fill="#ffa94d"/><circle cx="580" cy="127" r="2.5" fill="#ffa94d"/>
+  <text class="lbl-s" x="222" y="120">${T('wafer thinned to ~30–50 µm · TSV tips revealed','晶圆减薄至约 30–50µm · TSV 尖端露出')}</text>
+  <g class="gx" data-k="e1">
+    <ellipse class="shp f-inf" cx="430" cy="80" rx="90" ry="18"/>
+    <line x1="430" y1="62" x2="430" y2="40" stroke="#44537a" stroke-width="6"/>
+    <text class="lbl" x="360" y="35">${T('Back-grind wheel','背磨砂轮')}</text>
+  </g>
+  <g class="gx" data-k="e0">
+    <rect class="shp f-inf" x="60" y="80" width="110" height="100" rx="9"/>
+    <rect x="76" y="100" width="78" height="12" fill="#1b2a4a" stroke="#2c4271"/>
+    <rect x="76" y="128" width="78" height="12" fill="#1b2a4a" stroke="#2c4271"/>
+    <text class="lbl" x="42" y="215">${T('Temp bond / debond','临时键合/解键合')}</text>
+  </g>
+  <g class="gx" data-k="e2">
+    <rect class="shp f-inf" x="740" y="80" width="150" height="100" rx="9"/>
+    <ellipse cx="815" cy="140" rx="45" ry="10" fill="#cfd8ea" opacity=".85"/>
+    <ellipse cx="815" cy="105" rx="24" ry="8" fill="rgba(177,151,252,.3)"/>
+    <text class="lbl" x="732" y="215">${T('TSV-reveal etch + CMP','TSV 露头刻蚀与 CMP')}</text>
+  </g>
+</svg>`,
+stack: ()=>`<svg viewBox="0 0 960 250" xmlns="http://www.w3.org/2000/svg">
+  <g class="gx" data-k="e0">
+    <rect class="shp f-inf" x="260" y="20" width="240" height="16" rx="5"/>
+    <rect class="shp f-inf" x="352" y="36" width="56" height="34" rx="5"/>
+    <rect x="362" y="74" width="36" height="10" fill="#cfd8ea"/>
+    <line x1="380" y1="88" x2="380" y2="100" stroke="#44537a" stroke-dasharray="3 3"/>
+    <text class="lbl" x="250" y="238">${T('TC bonder places + presses each die (heat + force)','TC 键合机逐片放置并热压（加热+加压）')}</text>
+  </g>
+  <rect x="300" y="182" width="160" height="14" fill="#16233e" stroke="#7cc4ff"/>
+  <text class="lbl-s" x="470" y="194">${T('← base die','← 基底片')}</text>
+  <rect x="310" y="166" width="140" height="12" fill="#cfd8ea" opacity=".9"/>
+  <rect x="310" y="150" width="140" height="12" fill="#cfd8ea" opacity=".9"/>
+  <rect x="310" y="134" width="140" height="12" fill="#cfd8ea" opacity=".9"/>
+  <rect x="310" y="118" width="140" height="12" fill="#cfd8ea" opacity=".9"/>
+  <circle cx="330" cy="164" r="2" fill="#ffa94d"/><circle cx="360" cy="164" r="2" fill="#ffa94d"/><circle cx="390" cy="164" r="2" fill="#ffa94d"/><circle cx="420" cy="164" r="2" fill="#ffa94d"/>
+  <circle cx="330" cy="148" r="2" fill="#ffa94d"/><circle cx="360" cy="148" r="2" fill="#ffa94d"/><circle cx="390" cy="148" r="2" fill="#ffa94d"/><circle cx="420" cy="148" r="2" fill="#ffa94d"/>
+  <circle cx="330" cy="132" r="2" fill="#ffa94d"/><circle cx="360" cy="132" r="2" fill="#ffa94d"/><circle cx="390" cy="132" r="2" fill="#ffa94d"/><circle cx="420" cy="132" r="2" fill="#ffa94d"/>
+  <text class="lbl-s" x="180" y="145">${T('8–16 dies','8–16 层裸片')}</text>
+  <g class="gx" data-k="m0">
+    <line class="shp" x1="310" y1="163" x2="450" y2="163" stroke="rgba(56,217,169,.95)" stroke-width="3"/>
+    <line class="shp" x1="310" y1="147" x2="450" y2="147" stroke="rgba(56,217,169,.95)" stroke-width="3"/>
+    <line class="shp" x1="310" y1="131" x2="450" y2="131" stroke="rgba(56,217,169,.95)" stroke-width="3"/>
+    <text class="lbl-s" x="470" y="140">${T('← NCF film between dies','← 层间 NCF 薄膜')}</text>
+  </g>
+  <g class="gx" data-k="m1">
+    <rect class="shp f-stg" x="620" y="150" width="20" height="34" rx="4"/>
+    <text class="lbl-s" x="608" y="205">${T('flux','助焊剂')}</text>
+  </g>
+  <g class="gx" data-k="e1">
+    <rect class="shp f-inf" x="720" y="60" width="170" height="110" rx="9" stroke-dasharray="6 4"/>
+    <rect x="760" y="95" width="90" height="10" fill="#cfd8ea"/>
+    <rect x="760" y="109" width="90" height="10" fill="#cfd8ea"/>
+    <text class="lbl-s" x="740" y="85">${T('bumpless Cu–Cu','无凸点铜-铜')}</text>
+    <text class="lbl" x="712" y="200">${T('Hybrid bonding (HBM4E+)','混合键合（HBM4E+）')}</text>
+  </g>
+</svg>`,
+mold: ()=>`<svg viewBox="0 0 960 250" xmlns="http://www.w3.org/2000/svg">
+  <g class="gx" data-k="e0">
+    <rect class="shp f-inf" x="250" y="30" width="360" height="30" rx="6"/>
+    <rect class="shp f-inf" x="250" y="180" width="360" height="30" rx="6"/>
+    <line x1="300" y1="60" x2="300" y2="180" stroke="#44537a" stroke-dasharray="4 4"/>
+    <line x1="560" y1="60" x2="560" y2="180" stroke="#44537a" stroke-dasharray="4 4"/>
+    <text class="lbl" x="248" y="238">${T('Compression molding press (TOWA-class)','压缩成型机（TOWA 级）')}</text>
+  </g>
+  <rect x="360" y="150" width="140" height="12" fill="#16233e" stroke="#7cc4ff"/>
+  <rect x="370" y="136" width="120" height="10" fill="#cfd8ea" opacity=".9"/>
+  <rect x="370" y="122" width="120" height="10" fill="#cfd8ea" opacity=".9"/>
+  <rect x="370" y="108" width="120" height="10" fill="#cfd8ea" opacity=".9"/>
+  <g class="gx" data-k="m0">
+    <path class="shp f-stg" d="M330,95 q100,-28 200,0 v70 h-200 z" fill-opacity=".25"/>
+    <circle class="shp f-stg" cx="345" cy="82" r="5"/><circle class="shp f-stg" cx="510" cy="80" r="5"/>
+    <text class="lbl-s" x="620" y="120">${T('← liquid EMC flows between dies (MR-MUF)','← 液态塑封料流入层间（MR-MUF）')}</text>
+  </g>
+  <g class="gx" data-k="m1">
+    <polygon class="shp f-stg" points="120,150 140,135 158,148 150,168 126,168"/>
+    <text class="lbl-s" x="100" y="195">${T('granular EMC (over-mold)','颗粒塑封料（外层）')}</text>
+  </g>
+</svg>`,
+ktest: ()=>`<svg viewBox="0 0 960 250" xmlns="http://www.w3.org/2000/svg">
+  <g class="gx" data-k="e0">
+    <rect class="shp f-inf" x="70" y="35" width="130" height="175" rx="10"/>
+    <rect x="84" y="50" width="102" height="20" fill="#101c33" stroke="#2c4271"/><circle cx="176" cy="60" r="3" fill="#69db7c"/>
+    <rect x="84" y="80" width="102" height="20" fill="#101c33" stroke="#2c4271"/><circle cx="176" cy="90" r="3" fill="#69db7c"/>
+    <rect x="84" y="110" width="102" height="20" fill="#101c33" stroke="#2c4271"/><circle cx="176" cy="120" r="3" fill="#69db7c"/>
+    <text class="lbl" x="72" y="232">${T('Memory ATE','存储测试机')}</text>
+  </g>
+  <path d="M200,120 h80" stroke="#44537a" stroke-width="5"/>
+  <g class="gx" data-k="e1">
+    <rect class="shp f-inf" x="280" y="50" width="280" height="160" rx="12"/>
+    <rect x="380" y="168" width="90" height="14" fill="#16233e" stroke="#7cc4ff"/>
+    <rect x="388" y="154" width="74" height="12" fill="#cfd8ea"/>
+    <rect x="388" y="140" width="74" height="12" fill="#cfd8ea"/>
+    <text class="lbl" x="284" y="232">${T('Prober — stack on chuck','探针台 — 堆栈上卡盘')}</text>
+  </g>
+  <g class="gx" data-k="m0">
+    <rect class="shp f-stg" x="360" y="92" width="130" height="14" rx="4"/>
+    <line x1="385" y1="106" x2="385" y2="136" stroke="rgba(56,217,169,.9)" stroke-width="2"/>
+    <line x1="415" y1="106" x2="415" y2="136" stroke="rgba(56,217,169,.9)" stroke-width="2"/>
+    <line x1="445" y1="106" x2="445" y2="136" stroke="rgba(56,217,169,.9)" stroke-width="2"/>
+    <text class="lbl-s" x="500" y="102">${T('← probe card','← 探针卡')}</text>
+  </g>
+  <g class="gx" data-k="e2">
+    <rect class="shp f-inf" x="640" y="60" width="220" height="140" rx="12"/>
+    <rect x="662" y="82" width="176" height="14" fill="#101c33" stroke="#2c4271"/>
+    <rect x="662" y="108" width="176" height="14" fill="#101c33" stroke="#2c4271"/>
+    <rect x="662" y="134" width="176" height="14" fill="#101c33" stroke="#2c4271"/>
+    <path d="M690,175 q6,-10 0,-18 M730,175 q6,-10 0,-18 M770,175 q6,-10 0,-18" fill="none" stroke="rgba(255,169,77,.8)" stroke-width="2"/>
+    <text class="lbl" x="648" y="228">${T('Burn-in','老化')}</text>
+  </g>
+</svg>`,
+cowos: ()=>`<svg viewBox="0 0 960 250" xmlns="http://www.w3.org/2000/svg">
+  <rect x="180" y="185" width="600" height="26" rx="4" fill="#12251d" stroke="#2d5444"/>
+  <text class="lbl-s" x="182" y="232">${T('ABF substrate (see Packaging stage)','ABF 基板（见封装阶段）')}</text>
+  <g class="gx" data-k="m0">
+    <rect class="shp f-stg" x="230" y="168" width="500" height="16" rx="3"/>
+    <text class="lbl-s" x="740" y="180">${T('← Si interposer','← 硅中介层')}</text>
+  </g>
+  <g class="gx" data-k="e0">
+    <rect class="shp f-inf" x="400" y="95" width="160" height="70" rx="6"/>
+    <text class="lbl-s" x="440" y="135">GPU / XPU</text>
+    <rect x="270" y="115" width="100" height="10" fill="#cfd8ea" opacity=".9"/><rect x="270" y="129" width="100" height="10" fill="#cfd8ea" opacity=".9"/><rect x="270" y="143" width="100" height="10" fill="#cfd8ea" opacity=".9"/><rect x="270" y="157" width="100" height="8" fill="#16233e" stroke="#7cc4ff"/>
+    <rect x="590" y="115" width="100" height="10" fill="#cfd8ea" opacity=".9"/><rect x="590" y="129" width="100" height="10" fill="#cfd8ea" opacity=".9"/><rect x="590" y="143" width="100" height="10" fill="#cfd8ea" opacity=".9"/><rect x="590" y="157" width="100" height="8" fill="#16233e" stroke="#7cc4ff"/>
+    <text class="lbl-s" x="272" y="108">${T('HBM stack','HBM 堆栈')}</text>
+    <text class="lbl-s" x="592" y="108">${T('HBM stack','HBM 堆栈')}</text>
+    <text class="lbl" x="330" y="60">${T('Chip-on-wafer bonding + on-substrate assembly (CoWoS)','晶上键合与基板装配（CoWoS）')}</text>
+  </g>
+  <g class="gx" data-k="e1">
+    <path class="shp f-inf" d="M770,70 h14 v30 l-7,12 l-7,-12 z"/>
+    <text class="lbl-s" x="792" y="95">${T('underfill dispense','底填点胶')}</text>
+  </g>
+  <g class="gx" data-k="m1">
+    <path class="shp f-stg" d="M370,165 q10,-14 20,0 z"/>
+    <path class="shp f-stg" d="M560,165 q10,-14 20,0 z"/>
+    <text class="lbl-s" x="60" y="150">${T('underfill fillets →','底填胶角 →')}</text>
+  </g>
+</svg>`
+};
+
+/* ---- HBM per-stage vendor market shares (est.) ---- */
+const HBM_PIES = {
+dram:[
+ {t:'HBM makers — bit share', zhT:'HBM 制造商份额（按位元）', d:[['SK hynix',52,'KRX: 000660'],['Samsung',28,'KRX: 005930'],['Micron',20,'NASDAQ: MU']]},
+ {t:'DRAM fab equipment vendor share', zhT:'DRAM 晶圆厂设备份额', d:[['Applied Materials',22,'AMAT'],['Lam Research',20,'LRCX'],['Tokyo Electron',18,'TYO: 8035'],['ASML',15,'ASML'],['KLA',8,'KLAC'],['ASM International',5,'AMS: ASM'],['Kokusai',4,'TYO: 6525'],['Others',8]]}
+],
+base:[
+ {t:'Base-die manufacturing (HBM4 era)', zhT:'基底片制造份额（HBM4 时代）', d:[['TSMC (SK hynix base dies)',50,'NYSE: TSM'],['In-house (Samsung / Micron)',50,'005930 · MU']]}
+],
+tsv:[
+ {t:'TSV equipment vendor share', zhT:'TSV 设备厂商份额', d:[['Lam Research',45,'LRCX'],['Applied Materials',25,'AMAT'],['Tokyo Electron',12,'TYO: 8035'],['Ebara',8,'TYO: 6361'],['SPTS (KLA)',5,'KLAC'],['Others',5]]},
+ {t:'TSV materials vendor share', zhT:'TSV 材料厂商份额', d:[['MKS (Atotech)',25,'MKSI'],['Element Solutions',20,'ESI'],['JX Advanced Metals',12,'TYO: 5016'],['Entegris',12,'ENTG'],['Fujimi',8,'TYO: 5384'],['Resonac',8,'TYO: 4004'],['Others',15]]}
+],
+bump:[
+ {t:'Bumping equipment vendor share', zhT:'微凸点设备厂商份额', d:[['Veeco',25,'VECO'],['Onto Innovation',20,'ONTO'],['Ushio',15,'TYO: 6925'],['Canon',10,'TYO: 7751'],['Applied Materials',10,'AMAT'],['Lam Research',8,'LRCX'],['ACM Research',5,'ACMR'],['Others',7]]},
+ {t:'Bumping materials vendor share', zhT:'微凸点材料厂商份额', d:[['JSR',20,'JIC'],['TOK',18,'TYO: 4186'],['DuPont',15,'DD'],['Element Solutions',15,'ESI'],['Resonac',10,'TYO: 4004'],['Others',22]]}
+],
+thin:[
+ {t:'Thinning equipment vendor share', zhT:'减薄设备厂商份额', d:[['Disco',35,'TYO: 6146'],['EV Group',25],['Accretech',12,'TYO: 7729'],['SUSS MicroTec',10,'ETR: SMHN'],['Lam Research',8,'LRCX'],['Ebara',5,'TYO: 6361'],['Others',5]]},
+ {t:'Thinning materials vendor share', zhT:'减薄材料厂商份额', d:[['Brewer Science',30],['TOK',20,'TYO: 4186'],['3M',15,'MMM'],['Corning',12,'GLW'],['AGC',8,'TYO: 5201'],['Others',15]]}
+],
+stack:[
+ {t:'HBM TC-bonder vendor share', zhT:'HBM TC 键合机厂商份额', d:[['Hanmi Semiconductor',40,'KRX: 042700'],['ASMPT',25,'HKG: 0522'],['SEMES (Samsung)',12,'005930'],['Hanwha Semitech',10,'KRX: 000880'],['Shinkawa (Yamaha)',8,'TYO: 7272'],['Others',5]]},
+ {t:'Bonding materials vendor share', zhT:'键合材料厂商份额', d:[['Resonac (NCF)',55,'TYO: 4004'],['Senju Metal',15],['Element Solutions',10,'ESI'],['Others',20]]}
+],
+mold:[
+ {t:'Molding equipment vendor share', zhT:'塑封设备厂商份额', d:[['TOWA',60,'TYO: 6315'],['APIC Yamada',15],['ASMPT',15,'HKG: 0522'],['Others',10]]},
+ {t:'Molding materials vendor share', zhT:'塑封材料厂商份额', d:[['Nagase (ChemteX)',35,'TYO: 8012'],['Resonac',25,'TYO: 4004'],['Namics',15],['Sumitomo Bakelite',10,'TYO: 4203'],['Others',15]]}
+],
+ktest:[
+ {t:'HBM test equipment vendor share', zhT:'HBM 测试设备厂商份额', d:[['Advantest',60,'TYO: 6857'],['Teradyne',22,'TER'],['Tokyo Electron',8,'TYO: 8035'],['Accretech',5,'TYO: 7729'],['Others',5]]},
+ {t:'Probe cards & interfaces vendor share', zhT:'探针卡与测试接口份额', d:[['FormFactor',35,'FORM'],['Micronics Japan',20,'TYO: 6871'],['Technoprobe',15,'BIT: TPRO'],['ISC',10,'KOSDAQ: 095340'],['Leeno',8,'KOSDAQ: 058470'],['Others',12]]}
+],
+cowos:[
+ {t:'2.5D AI-packaging capacity share', zhT:'2.5D AI 封装产能份额', d:[['TSMC (CoWoS)',80,'NYSE: TSM'],['Samsung (I-Cube)',8,'KRX: 005930'],['Amkor',5,'AMKR'],['SPIL (ASE)',4,'TWSE: 3711'],['Others',3]]}
+]
+};
+
+/* ---- flow registry: logic process vs HBM ---- */
+const FLOWS = {
+  process: {
+    stages: STAGES, gfx: GFX, pies: PIES, wk: WK, sid: STAGES[0].id, unit: [' / wafer',' / 片'],
+    basis: ['Basis: leading-edge logic (3 nm-class) 300 mm wafer, foundry ASP ≈ $18–20k. Material $ = direct consumable spend per wafer; equipment $ = implied tool depreciation per wafer (≈$5–7k total at the leading edge). All figures are directional analyst estimates that vary with node, product and fab loading; not investment advice.',
+            '口径：以先进逻辑（3nm 级）300mm 晶圆为基准，代工均价约 $18–20k/片。材料金额 = 每片直接耗材支出；设备金额 = 每片隐含设备折旧（先进制程合计约 $5–7k/片）。所有数字为方向性分析师估算，随节点、产品与产能利用率变化；不构成投资建议。'],
+    tipBasis: ['Directional estimate for a leading-edge logic (3 nm-class) 300 mm wafer, foundry ASP ≈ $18–20k. Equipment = implied depreciation per wafer; materials = direct spend. Varies with node, product and loading.',
+               '以 3nm 级先进逻辑 300mm 晶圆为基准（代工均价约 $18–20k）的方向性估算。设备为每片隐含折旧；材料为直接支出。随节点、产品与稼动率变化。']
+  },
+  hbm: {
+    stages: HBM_STAGES, gfx: HBM_GFX, pies: HBM_PIES, wk: WKH, sid: HBM_STAGES[0].id, unit: [' / stack',' / 颗'],
+    basis: ['Basis: one 12-Hi HBM3E 36 GB stack ("cube"), ASP ≈ $500–550. Stage $ = estimated cost contribution per finished stack including yield burden — stacking/bond yield is the single biggest swing factor. Merchant-scale HBM comes from three companies (SK hynix, Samsung, Micron; China’s CXMT emerging on trailing generations); every item below is a supplier selling into their lines or TSMC’s. Directional analyst estimates; not investment advice.',
+            '口径：以一颗 12 层 HBM3E 36GB 堆栈为基准（单颗售价约 $500–550）。各阶段金额为每颗成品堆栈的估算成本贡献（含良率负担）——堆叠/键合良率是最大变量。规模化商用 HBM 出自三家公司（SK 海力士、三星、美光；中国长鑫正以上代产品切入）；下列各项均为向其产线或台积电供货的供应商。方向性分析师估算；不构成投资建议。'],
+    tipBasis: ['Directional estimate per finished 12-Hi HBM3E 36 GB stack (ASP ≈ $500–550), yield-burdened. Equipment = implied depreciation per stack; materials = direct spend per stack.',
+               '以一颗 12 层 HBM3E 36GB 成品堆栈为基准（售价约 $500–550，含良率负担）的方向性估算。设备为每颗堆栈隐含折旧；材料为每颗直接支出。']
+  }
+};
+function FL(){ return FLOWS[document.body.dataset.view==='hbm' ? 'hbm' : 'process']; }
 let activeProc = null;
 
 function renderStageList(){
+  const f = FL();
   const el = document.getElementById('stageList'); el.innerHTML='';
-  STAGES.forEach((s,i)=>{
-    const b = document.createElement('button'); b.className = 'stagebtn'+(s.id===stageId?' on':'');
+  f.stages.forEach((s,i)=>{
+    const b = document.createElement('button'); b.className = 'stagebtn'+(s.id===f.sid?' on':'');
     b.innerHTML = '<span class="num">'+String(i+1).padStart(2,'0')+'</span><span class="sn">'+T(s.n,s.zh)+'</span><span class="stg">'+T(s.tag,s.zhTag)+'</span>';
-    b.addEventListener('click', e=>{ e.stopPropagation(); if(pinned) unpin(); stageId = s.id; renderStageList(); renderProcess(); });
+    b.addEventListener('click', e=>{ e.stopPropagation(); if(pinned) unpin(); f.sid = s.id; renderStageList(); renderProcess(); });
     el.appendChild(b);
   });
 }
@@ -2478,26 +3083,27 @@ function buildProcTip(st, it, kind){
   document.getElementById('tipGrp').textContent = T(st.n,st.zh)+' · '+(kind==='eq'?T('Equipment','设备'):T('Material','材料'));
   document.getElementById('tipGrp').style.color = kind==='eq' ? '#7cc4ff' : '#38d9a9';
   document.getElementById('tipName').textContent = T(it.n,it.zh);
-  document.getElementById('tipPct').textContent = (/^\$/.test(it.w)?'≈ ':'')+it.w+(/^\$/.test(it.w)?T(' / wafer',' / 片'):'');
-  document.getElementById('tipRng').textContent = T(WK[it.wk][0], WK[it.wk][1]);
+  document.getElementById('tipPct').textContent = (/^\$/.test(it.w)?'≈ ':'')+it.w+(/^\$/.test(it.w)?T(FL().unit[0], FL().unit[1]):'');
+  document.getElementById('tipRng').textContent = T(FL().wk[it.wk][0], FL().wk[it.wk][1]);
   const V = (it.v||[]).map(v=>({n:v.n, t:T(v.t, v.zhT||v.t), r:T(v.r||'', v.zhR||v.r||'')}));
   let h = '<div class="tip-desc">'+T(it.d,it.zhD)+'</div>';
   if(V.length) h += '<div class="tip-h">'+T('Who makes it','供应商（含上市代码）')+'</div><ul class="vlist">'+V.map(li).join('')+'</ul>';
   if(it.note) h += '<div class="note"><b>'+T('Investor note:','投资者要点：')+'</b> '+T(it.note,it.zhNote||it.note)+'</div>';
   h += '<div class="tip-h">'+T('How to read the $ figure','金额口径')+'</div><div style="font-size:11px;color:#8b97b4">'
-     + T('Directional estimate for a leading-edge logic (3 nm-class) 300 mm wafer, foundry ASP ≈ $18–20k. Equipment = implied depreciation per wafer; materials = direct spend. Varies with node, product and loading.',
-         '以 3nm 级先进逻辑 300mm 晶圆为基准（代工均价约 $18–20k）的方向性估算。设备为每片隐含折旧；材料为直接支出。随节点、产品与稼动率变化。')+'</div>';
+     + T(FL().tipBasis[0], FL().tipBasis[1])+'</div>';
   document.getElementById('tipBody').innerHTML = h;
 }
 function renderProcess(){
-  const st = STAGES.find(x=>x.id===stageId);
+  const f = FL();
+  const st = f.stages.find(x=>x.id===f.sid);
+  document.getElementById('procBasis').innerHTML = T(f.basis[0], f.basis[1]);
   const mini = document.getElementById('procMini');
   mini.innerHTML = '';
-  STAGES.forEach((x,i)=>{
+  f.stages.forEach((x,i)=>{
     if(i>0){ const a=document.createElement('span'); a.className='marrow'; a.textContent='→'; mini.appendChild(a); }
-    const m = document.createElement('span'); m.className='mini'+(x.id===stageId?' on':'');
+    const m = document.createElement('span'); m.className='mini'+(x.id===f.sid?' on':'');
     m.textContent = (i+1)+'. '+T(x.short,x.zhShort);
-    m.addEventListener('click', e=>{ e.stopPropagation(); if(pinned) unpin(); stageId=x.id; renderStageList(); renderProcess(); });
+    m.addEventListener('click', e=>{ e.stopPropagation(); if(pinned) unpin(); f.sid=x.id; renderStageList(); renderProcess(); });
     mini.appendChild(m);
   });
   document.getElementById('procTitle').innerHTML = T(st.n,st.zh)+'<span class="ptag">'+T(st.tag,st.zhTag)+'</span>';
@@ -2505,7 +3111,7 @@ function renderProcess(){
   document.getElementById('procTotals').innerHTML = '<span class="chip">'+T(st.tot,st.zhTot)+'</span>';
   document.getElementById('flowSteps').innerHTML = st.steps.map(s=>'<span class="fstep">'+T(s[0],s[1])+'</span>').join('<span class="farrow">→</span>');
   const gb = document.getElementById('gfxBox');
-  gb.innerHTML = GFX[st.id] ? GFX[st.id]() : '';
+  gb.innerHTML = f.gfx[st.id] ? f.gfx[st.id]() : '';
   document.getElementById('laneGfx').style.display = gb.innerHTML ? '' : 'none';
   gb.querySelectorAll('.gx').forEach(g=>{
     const k = g.dataset.k, kind = k.charAt(0)==='e' ? 'eq' : 'mat';
@@ -2527,8 +3133,8 @@ function renderProcess(){
   });
   document.getElementById('laneMat').style.display = st.mat.length ? '' : 'none';
   const pb = document.getElementById('pieBox'); pb.innerHTML='';
-  (PIES[st.id]||[]).forEach(p=>pb.appendChild(pieCard(p)));
-  document.getElementById('lanePie').style.display = (PIES[st.id]||[]).length ? '' : 'none';
+  (f.pies[st.id]||[]).forEach(p=>pb.appendChild(pieCard(p)));
+  document.getElementById('lanePie').style.display = (f.pies[st.id]||[]).length ? '' : 'none';
 }
 
 /* ---------- view switch ---------- */
@@ -2536,6 +3142,7 @@ function setView(v){
   document.body.dataset.view = v;
   document.querySelectorAll('#viewTabs button').forEach(b=>b.classList.toggle('on', b.dataset.view===v));
   if(pinned) unpin(); else clearActive();
+  if(v!=='euv'){ renderStageList(); renderProcess(); }
 }
 document.querySelectorAll('#viewTabs button').forEach(b=>{
   b.addEventListener('click', e=>{ e.stopPropagation(); setView(b.dataset.view); });

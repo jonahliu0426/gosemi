@@ -2,10 +2,11 @@
 
 A single-page interactive explorer for semiconductor investors and analysts, served at **[gosemi.app](https://gosemi.app)**.
 
-Two views, fully bilingual (English / 简体中文):
+Three views, fully bilingual (English / 简体中文):
 
 1. **EUV Machine Explorer** — interactive cutaway of an ASML TWINSCAN-class EUV scanner. Hover any component for vendors, materials, manufacturing toolchain, and estimated share of system value (Low-NA vs High-NA basis toggle).
 2. **Chip-Making Process Flow** — all 15 stages from chip design to final test. Each stage has an interactive schematic, equipment/materials with estimated per-wafer $ contribution, hover panels with makers and tickers, and per-stage company market-share pie charts.
+3. **HBM Manufacturing Flow** — the 9 stages of high-bandwidth memory production, from DRAM core-die fabrication through TSV, microbumping, stacking (TCB-NCF vs MR-MUF), molding, KGSD test and CoWoS-class 2.5D integration — with per-stack $ estimates, vendor hover panels and market-share pies.
 
 ## Tech
 
